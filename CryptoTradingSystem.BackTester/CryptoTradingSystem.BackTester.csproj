@@ -5,15 +5,22 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <OutputPath>..\..\Releasebuilds\CryptoTradingSystem.BackTester\</OutputPath>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
     <PackageReference Include="MySql.Data" Version="8.0.29" />
     <PackageReference Include="MySql.EntityFrameworkCore" Version="5.0.13" />
+    <PackageReference Include="Serilog" Version="2.11.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="CryptoTradingSystem.General">
-      <HintPath>..\..\CryptoTradingSystem.General\CryptoTradingSystem.General\bin\Release\netcoreapp3.1\CryptoTradingSystem.General.dll</HintPath>
+      <HintPath>..\..\Releasebuilds\CryptoTradingSystem.General\netcoreapp3.1\CryptoTradingSystem.General.dll</HintPath>
     </Reference>
   </ItemGroup>
 
