@@ -2,7 +2,6 @@
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.Json.Serialization;
 using System.Text.Json;
 
 using Microsoft.Extensions.Configuration;
@@ -23,7 +22,12 @@ namespace CryptoTradingSystem.BackTester
             var loggingfilePath = config.GetValue<string>(LoggingLocation);
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
+#if RELEASE
+                .WriteTo.Console(restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information)
+#endif
+#if DEBUG
                 .WriteTo.Console()
+#endif
                 .WriteTo.File(loggingfilePath, rollingInterval: RollingInterval.Day)
                 .CreateLogger();
 
@@ -67,6 +71,8 @@ namespace CryptoTradingSystem.BackTester
             {
                 Log.Error(e, "An Error appeared while executing the Strategy.");
             }
+
+            Console.ReadKey();
         }
 
         private static void OverrideConfigFile(IConfiguration config)
