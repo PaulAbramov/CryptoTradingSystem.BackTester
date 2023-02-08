@@ -50,18 +50,18 @@ namespace CryptoTradingSystem.BackTester
             Log.Debug("Looking for strategy.dll in path: {strategyDll}", strategyDll);
 
             object obj;
-            MethodInfo executeStrategyMethod;
+            MethodInfo? executeStrategyMethod;
             StrategyParameter strategyParameter;
             try
             {
                 var DLLPath = new FileInfo(strategyDll);
                 var assembly = Assembly.LoadFile(DLLPath.FullName);
                 var t = assembly.GetTypes().First();
-                obj = Activator.CreateInstance(t);
+                obj = Activator.CreateInstance(t) ?? throw new InvalidOperationException();
                 var method = t.GetMethod("SetupStrategyParameter");
                 executeStrategyMethod = t.GetMethod("ExecuteStrategy");
 
-                strategyParameter = (StrategyParameter)method?.Invoke(obj, null);
+                strategyParameter = (StrategyParameter)(method?.Invoke(obj, null) ?? throw new InvalidOperationException());
             }
             catch (Exception ex)
             {
@@ -80,7 +80,7 @@ namespace CryptoTradingSystem.BackTester
                 try
                 {
                     IEnumerable<Indicator> indicatorsToCheck;
-                    Type test = null;
+                    Type? test = null;
                     switch (asset.Item3)
                     {
                         case Enums.Indicators.EMA:
