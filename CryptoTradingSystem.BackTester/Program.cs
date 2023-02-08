@@ -16,11 +16,11 @@ using Serilog;
 
 namespace CryptoTradingSystem.BackTester
 {
-    class Program
+    internal static class Program
     {
-        private static string StrategyDll = "StrategyDll";
-        private static string ConnectionString = "ConnectionString";
-        private static string LoggingLocation = "LoggingLocation";
+        private const string StrategyDll = "StrategyDll";
+        private const string ConnectionString = "ConnectionString";
+        private const string LoggingLocation = "LoggingLocation";
 
         static void Main(string[] args)
         {
@@ -55,13 +55,13 @@ namespace CryptoTradingSystem.BackTester
             try
             {
                 var DLLPath = new FileInfo(strategyDll);
-                Assembly assembly = Assembly.LoadFile(DLLPath.FullName);
-                Type t = assembly.GetTypes().First();
+                var assembly = Assembly.LoadFile(DLLPath.FullName);
+                var t = assembly.GetTypes().First();
                 obj = Activator.CreateInstance(t);
-                MethodInfo method = t.GetMethod("SetupStrategyParameter");
+                var method = t.GetMethod("SetupStrategyParameter");
                 executeStrategyMethod = t.GetMethod("ExecuteStrategy");
 
-                strategyParameter = (StrategyParameter)method.Invoke(obj, null);
+                strategyParameter = (StrategyParameter)method?.Invoke(obj, null);
             }
             catch (Exception ex)
             {
@@ -118,11 +118,11 @@ namespace CryptoTradingSystem.BackTester
                     var databaseHandler = new MySQLDatabaseHandler(config.GetValue<string>(ConnectionString));
 
                     //make the call to "GetIndicators" Generic
-                    Type test2 = databaseHandler.GetType();
+                    var test2 = databaseHandler.GetType();
 
                     var method = test2.GetMethod("GetIndicators");
-                    var genericMethod = method.MakeGenericMethod(test);
-                    var result = genericMethod.Invoke(databaseHandler, null);
+                    var genericMethod = method?.MakeGenericMethod(test);
+                    var result = genericMethod?.Invoke(databaseHandler, null);
 
                     //Log.Debug("Received {amount} entries from the database.", indicatorsToCheck?.Count());
                 }
@@ -142,7 +142,7 @@ namespace CryptoTradingSystem.BackTester
 
             try
             {
-                string TargetString = (string)executeStrategyMethod.Invoke(obj, null);
+                var targetString = (string)executeStrategyMethod?.Invoke(obj, null);
             }
             catch (Exception e)
             {
