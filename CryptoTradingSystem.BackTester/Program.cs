@@ -1,8 +1,15 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+
+using CryptoTradingSystem.General.Data;
+using CryptoTradingSystem.General.Database;
+using CryptoTradingSystem.General.Database.Models;
+using CryptoTradingSystem.General.Helper;
+using CryptoTradingSystem.General.Strategy;
 
 using Microsoft.Extensions.Configuration;
 using Serilog;
@@ -43,14 +50,18 @@ namespace CryptoTradingSystem.BackTester
             Log.Debug("Looking for strategy.dll in path: {strategyDll}", strategyDll);
 
             object obj;
-            MethodInfo method;
+            MethodInfo executeStrategyMethod;
+            StrategyParameter strategyParameter;
             try
             {
                 var DLLPath = new FileInfo(strategyDll);
                 Assembly assembly = Assembly.LoadFile(DLLPath.FullName);
                 Type t = assembly.GetTypes().First();
                 obj = Activator.CreateInstance(t);
-                method = t.GetMethod("ExecuteStrategy");
+                MethodInfo method = t.GetMethod("SetupStrategyParameter");
+                executeStrategyMethod = t.GetMethod("ExecuteStrategy");
+
+                strategyParameter = (StrategyParameter)method.Invoke(obj, null);
             }
             catch (Exception ex)
             {
@@ -58,21 +69,85 @@ namespace CryptoTradingSystem.BackTester
                 return;
             }
 
-            object[] parameters = new object[]
+            if(strategyParameter.Assets.Count == 0)
             {
-                config.GetValue<string>(ConnectionString)
-            };
+                Log.Error("No Assets requested in Strategyparameter.");
+                return;
+            }
+
+            foreach(var asset in strategyParameter.Assets)
+            {
+                try
+                {
+                    IEnumerable<Indicator> indicatorsToCheck;
+                    Type test = null;
+                    switch (asset.Item3)
+                    {
+                        case Enums.Indicators.EMA:
+                            test = typeof(EMA);
+                            //indicatorsToCheck = Retry.Do(() => databaseHandler
+                            //    .GetIndicators<EMA>(
+                            //    asset.Item2,
+                            //    asset.Item1,
+                            //    asset.Item3),
+                            //    TimeSpan.FromSeconds(1));
+                            break;
+                        case Enums.Indicators.SMA:
+                            test = typeof(SMA);
+                            //indicatorsToCheck = Retry.Do(() => databaseHandler
+                            //    .GetIndicators<SMA>(
+                            //    asset.Item2,
+                            //    asset.Item1,
+                            //    asset.Item3),
+                            //    TimeSpan.FromSeconds(1));
+                            break;
+                        case Enums.Indicators.ATR:
+                            test = typeof(ATR);
+                            //indicatorsToCheck = Retry.Do(() => databaseHandler
+                            //    .GetIndicators<ATR>(
+                            //    asset.Item2,
+                            //    asset.Item1,
+                            //    asset.Item3),
+                            //    TimeSpan.FromSeconds(1));
+                            break;
+                        default:
+                            indicatorsToCheck = Enumerable.Empty<Indicator>();
+                            break;
+                    }
+
+                    var databaseHandler = new MySQLDatabaseHandler(config.GetValue<string>(ConnectionString));
+
+                    //make the call to "GetIndicators" Generic
+                    Type test2 = databaseHandler.GetType();
+
+                    var method = test2.GetMethod("GetIndicators");
+                    var genericMethod = method.MakeGenericMethod(test);
+                    var result = genericMethod.Invoke(databaseHandler, null);
+
+                    //Log.Debug("Received {amount} entries from the database.", indicatorsToCheck?.Count());
+                }
+                catch (Exception e)
+                {
+                    Log.Error(
+                        e,
+                        "{asset} | {timeFrame} | {indicator} | {lastClose} | could not get indicators from Database",
+                        Enums.Assets.Btcusdt.GetStringValue(),
+                        Enums.TimeFrames.M5.GetStringValue(),
+                        Enums.Indicators.EMA.GetStringValue(),
+                        DateTime.Now.AddMonths(-1));
+
+                    throw;
+                }
+            }
 
             try
             {
-                string TargetString = (string)method.Invoke(obj, parameters: parameters);
+                string TargetString = (string)executeStrategyMethod.Invoke(obj, null);
             }
             catch (Exception e)
             {
                 Log.Error(e, "An Error appeared while executing the Strategy.");
             }
-
-            Console.ReadKey();
         }
 
         private static void OverrideConfigFile(IConfiguration config)
