@@ -51,7 +51,7 @@ namespace CryptoTradingSystem.BackTester
 
             object obj;
             MethodInfo? executeStrategyMethod;
-            StrategyParameter strategyParameter;
+            StrategyParameter strategyParameter = default;
             try
             {
                 var DLLPath = new FileInfo(strategyDll);
