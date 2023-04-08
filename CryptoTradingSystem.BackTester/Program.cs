@@ -8,7 +8,6 @@ using System.Text.Json;
 using CryptoTradingSystem.General.Data;
 using CryptoTradingSystem.General.Database;
 using CryptoTradingSystem.General.Database.Models;
-using CryptoTradingSystem.General.Helper;
 using CryptoTradingSystem.General.Strategy;
 
 using Microsoft.Extensions.Configuration;
@@ -22,7 +21,7 @@ namespace CryptoTradingSystem.BackTester
         private const string ConnectionString = "ConnectionString";
         private const string LoggingLocation = "LoggingLocation";
 
-        static void Main(string[] args)
+        private static void Main()
         {
             IConfiguration config = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
 
@@ -30,14 +29,37 @@ namespace CryptoTradingSystem.BackTester
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
 #if RELEASE
-                .WriteTo.Console(restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information)
+                .WriteTo.Console(restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information,
+                                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
 #endif
 #if DEBUG
-                .WriteTo.Console()
+                .WriteTo.Console(outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
 #endif
-                .WriteTo.File(loggingfilePath, rollingInterval: RollingInterval.Day)
+                .WriteTo.File(loggingfilePath ?? "logs/Backtester.txt", 
+                    rollingInterval: RollingInterval.Day,
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
 
+            // Get the path to the strategy.dll
+            var strategyDll = GetStrategyDllPath(config);
+            if (strategyDll is null)
+            {
+                Log.Error("No path to strategyDLL found in appsettings.json, please check the file");
+                return;
+            }
+            
+            var connectionString = config.GetValue<string>(ConnectionString);
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                Log.Error("No ConnectionString found in appsettings.json, please check the file");
+                return;
+            }
+            
+            ExecuteStrategy(strategyDll, connectionString);
+        }
+        
+        private static string? GetStrategyDllPath(IConfiguration config)
+        {
             var strategyDll = config.GetValue<string>(StrategyDll);
 
             if (string.IsNullOrEmpty(strategyDll))
@@ -49,105 +71,7 @@ namespace CryptoTradingSystem.BackTester
 
             Log.Debug("Looking for strategy.dll in path: {strategyDll}", strategyDll);
 
-            object obj;
-            MethodInfo? executeStrategyMethod;
-            StrategyParameter strategyParameter = default;
-            try
-            {
-                var DLLPath = new FileInfo(strategyDll);
-                var assembly = Assembly.LoadFile(DLLPath.FullName);
-                var t = assembly.GetTypes().First();
-                obj = Activator.CreateInstance(t) ?? throw new InvalidOperationException();
-                var method = t.GetMethod("SetupStrategyParameter");
-                executeStrategyMethod = t.GetMethod("ExecuteStrategy");
-
-                strategyParameter = (StrategyParameter)(method?.Invoke(obj, null) ?? throw new InvalidOperationException());
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Could not load strategy.dll. Please check the Path");
-                return;
-            }
-
-            if(strategyParameter.Assets.Count == 0)
-            {
-                Log.Error("No Assets requested in Strategyparameter.");
-                return;
-            }
-
-            foreach(var asset in strategyParameter.Assets)
-            {
-                try
-                {
-                    IEnumerable<Indicator> indicatorsToCheck;
-                    Type? test = null;
-                    switch (asset.Item3)
-                    {
-                        case Enums.Indicators.EMA:
-                            test = typeof(EMA);
-                            //indicatorsToCheck = Retry.Do(() => databaseHandler
-                            //    .GetIndicators<EMA>(
-                            //    asset.Item2,
-                            //    asset.Item1,
-                            //    asset.Item3),
-                            //    TimeSpan.FromSeconds(1));
-                            break;
-                        case Enums.Indicators.SMA:
-                            test = typeof(SMA);
-                            //indicatorsToCheck = Retry.Do(() => databaseHandler
-                            //    .GetIndicators<SMA>(
-                            //    asset.Item2,
-                            //    asset.Item1,
-                            //    asset.Item3),
-                            //    TimeSpan.FromSeconds(1));
-                            break;
-                        case Enums.Indicators.ATR:
-                            test = typeof(ATR);
-                            //indicatorsToCheck = Retry.Do(() => databaseHandler
-                            //    .GetIndicators<ATR>(
-                            //    asset.Item2,
-                            //    asset.Item1,
-                            //    asset.Item3),
-                            //    TimeSpan.FromSeconds(1));
-                            break;
-                        default:
-                            indicatorsToCheck = Enumerable.Empty<Indicator>();
-                            break;
-                    }
-
-                    var databaseHandler = new MySQLDatabaseHandler(config.GetValue<string>(ConnectionString));
-
-                    //make the call to "GetIndicators" Generic
-                    var test2 = databaseHandler.GetType();
-
-                    var method = test2.GetMethod("GetIndicators");
-                    var genericMethod = method?.MakeGenericMethod(test);
-                    var result = genericMethod?.Invoke(databaseHandler, null);
-
-                    //Log.Debug("Received {amount} entries from the database.", indicatorsToCheck?.Count());
-                }
-                catch (Exception e)
-                {
-                    Log.Error(
-                        e,
-                        "{asset} | {timeFrame} | {indicator} | {lastClose} | could not get indicators from Database",
-                        Enums.Assets.Btcusdt.GetStringValue(),
-                        Enums.TimeFrames.M5.GetStringValue(),
-                        Enums.Indicators.EMA.GetStringValue(),
-                        DateTime.Now.AddMonths(-1));
-
-                    throw;
-                }
-            }
-
-            try
-            {
-                var targetString = (string)executeStrategyMethod?.Invoke(obj, null);
-            }
-            catch (Exception e)
-            {
-                Log.Error(e, "An Error appeared while executing the Strategy.");
-            }
+            return strategyDll;
         }
 
         private static void OverrideConfigFile(IConfiguration config)
@@ -165,6 +89,116 @@ namespace CryptoTradingSystem.BackTester
             var json = JsonSerializer.Serialize(configAsDict, jsonWriteOptions);
 
             File.WriteAllText("appsettings.json", json);
+        }
+
+        private static void ExecuteStrategy(string strategyDll, string connectionString)
+        {
+            // Load methods "ExecuteStrategy" and "SetupStrategyParameter" from strategy.dll
+            StrategyParameter strategyParameter = default;
+            MethodInfo? executeStrategyMethod = default;
+            object? obj = default;
+            try
+            {
+                var dllPath = new FileInfo(strategyDll);
+                var assembly = Assembly.LoadFile(dllPath.FullName);
+                var types = assembly.GetTypes();
+                var t = types.FirstOrDefault(x => x.Name is "Strategy");
+                if (t is null)
+                {
+                    Log.Error("Could not load strategy.dll. Please check the Path");
+                    return;
+                }
+                
+                obj = Activator.CreateInstance(t) ?? throw new InvalidOperationException();
+                
+                var method = t.GetMethod("SetupStrategyParameter");
+                executeStrategyMethod = t.GetMethod("ExecuteStrategy");
+                if (executeStrategyMethod is null || method is null)
+                {
+                    Log.Error("Could not load methods 'SetupStrategyParameter' and 'ExecuteStrategy' from strategy.dll. " +
+                              "Please check the Strategy");
+                    return;
+                }
+
+                // execute SetupStrategyParameter
+                strategyParameter = (StrategyParameter)(method?.Invoke(obj, null) ?? throw new InvalidOperationException());
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Could not load strategy.dll. Please check the Path");
+                return;
+            }
+            
+            if(strategyParameter.Assets.Count == 0)
+            {
+                Log.Error("No Assets requested in Strategyparameter");
+                return;
+            }
+
+            var results = GetDataFromDatabase(strategyParameter, connectionString);
+
+            try
+            {
+                var targetString = (string)executeStrategyMethod?.Invoke(obj, new object?[]{results})!;
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, "An Error appeared while executing the Strategy");
+            }
+        }
+
+        /// <summary>
+        /// iterates over all assets and gets the data from the database
+        /// </summary>
+        /// <param name="strategyParameter"></param>
+        /// <param name="connectionString"></param>
+        /// <returns></returns>
+        private static List<List<Indicator>?> GetDataFromDatabase(StrategyParameter strategyParameter, string connectionString)
+        {
+            var results = new List<List<Indicator>?>();
+            foreach(var asset in strategyParameter.Assets)
+            {
+                try
+                {
+                    var databaseHandler = new MySQLDatabaseHandler(connectionString);
+
+                    //make the call to "GetIndicators" Generic
+                    var databaseHandlerType = databaseHandler.GetType();
+
+                    // muss ich das über reflection machen?
+                    var method = databaseHandlerType.GetMethod("GetIndicators");
+                    var genericMethod = method?.MakeGenericMethod(asset.Item3);
+                    
+                    //hier noch parameter übergeben
+                    var result = (IEnumerable<Indicator>) genericMethod?.Invoke(
+                        databaseHandler, 
+                        new object?[]
+                        {
+                            asset.Item2,
+                            asset.Item1,
+                            asset.Item3,
+                            strategyParameter.TimeFrameStart,
+                            strategyParameter.TimeFrameEnd
+                        })!;
+
+                    results.Add(result.ToList());
+                    //Log.Debug("Received {amount} entries from the database.", indicatorsToCheck?.Count());
+                }
+                catch (Exception e)
+                {
+                    Log.Error(
+                        e,
+                        "{asset} | {timeFrame} | {indicator} | {lastClose} | could not get indicators from Database",
+                        Enums.Assets.Btcusdt.GetStringValue(),
+                        Enums.TimeFrames.M5.GetStringValue(),
+                        asset.Item3.Name,
+                        DateTime.Now.AddMonths(-1));
+
+                    throw;
+                }
+            }
+
+            return results;
         }
     }
 }
