@@ -69,7 +69,7 @@ namespace CryptoTradingSystem.BackTester
 
             strategyDll = config.GetValue<string>(StrategyDll);
 
-            Log.Debug("Looking for strategy.dll in path: {strategyDll}", strategyDll);
+            Log.Debug("Looking for strategy.dll in path: {StrategyDll}", strategyDll);
 
             return strategyDll;
         }
@@ -135,15 +135,50 @@ namespace CryptoTradingSystem.BackTester
                 return;
             }
 
-            var results = GetDataFromDatabase(strategyParameter, connectionString);
+            while (true)
+            {
+                var tradestatus = Enums.TradeStatus.Closed;
+                var results = GetDataFromDatabase(strategyParameter, connectionString);
 
-            try
-            {
-                var targetString = (string)executeStrategyMethod?.Invoke(obj, new object?[]{results})!;
-            }
-            catch (Exception e)
-            {
-                Log.Error(e, "An Error appeared while executing the Strategy");
+                try
+                {
+                    var tradeType = (Enums.TradeType) executeStrategyMethod?.Invoke(obj, new object?[]{results, tradestatus})!;
+                    switch (tradeType)
+                    {
+                        case Enums.TradeType.None:
+                            continue;
+                        case Enums.TradeType.Buy:
+                            Log.Warning("Buy {AssetName} at {CloseTime}",
+                                strategyParameter.AssetToBuy,
+                                results.FirstOrDefault()?.CloseTime);
+                            break;
+                        case Enums.TradeType.Sell:
+                            Log.Warning("Sell {AssetName} at {CloseTime}",
+                                strategyParameter.AssetToBuy,
+                                results.FirstOrDefault()?.CloseTime);
+                            break;
+                        default:
+                            throw new ArgumentOutOfRangeException();
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.Error(e, "An Error appeared while executing the Strategy");
+                }
+                
+                if (results.Count == strategyParameter.Assets.Count)
+                {
+                    // check all assets for their closetime, compare them and increase the smallest closetime by its interval
+                    var smallestCloseTime = results.Min(x => x.CloseTime);
+                    var smallestInterval = results.Min(x => x.Interval);
+                    var smallestCloseTimeAsset = results.FirstOrDefault(x => x.CloseTime == smallestCloseTime);
+                    if (smallestCloseTimeAsset is null)
+                    {
+                        Log.Error("Could not find the smallest closetime asset");
+                        return;
+                    }
+                    smallestCloseTimeAsset.CloseTime = smallestCloseTime.AddSeconds(smallestInterval);
+                }
             }
         }
 
@@ -153,9 +188,9 @@ namespace CryptoTradingSystem.BackTester
         /// <param name="strategyParameter"></param>
         /// <param name="connectionString"></param>
         /// <returns></returns>
-        private static List<List<Indicator>?> GetDataFromDatabase(StrategyParameter strategyParameter, string connectionString)
+        private static List<Indicator> GetDataFromDatabase(StrategyParameter strategyParameter, string connectionString)
         {
-            var results = new List<List<Indicator>?>();
+            var results = new List<Indicator>();
             foreach(var asset in strategyParameter.Assets)
             {
                 try
@@ -165,12 +200,11 @@ namespace CryptoTradingSystem.BackTester
                     //make the call to "GetIndicators" Generic
                     var databaseHandlerType = databaseHandler.GetType();
 
-                    // muss ich das über reflection machen?
-                    var method = databaseHandlerType.GetMethod("GetIndicators");
+                    var method = databaseHandlerType.GetMethod("GetIndicator");
                     var genericMethod = method?.MakeGenericMethod(asset.Item3);
                     
-                    //hier noch parameter übergeben
-                    var result = (IEnumerable<Indicator>) genericMethod?.Invoke(
+                    //pass the parameters to the method
+                    var result = (Indicator?) genericMethod?.Invoke(
                         databaseHandler, 
                         new object?[]
                         {
@@ -179,16 +213,18 @@ namespace CryptoTradingSystem.BackTester
                             asset.Item3,
                             strategyParameter.TimeFrameStart,
                             strategyParameter.TimeFrameEnd
-                        })!;
+                        });
 
-                    results.Add(result.ToList());
-                    //Log.Debug("Received {amount} entries from the database.", indicatorsToCheck?.Count());
+                    if (result is not null)
+                    {
+                        results.Add(result);
+                    }
                 }
                 catch (Exception e)
                 {
                     Log.Error(
                         e,
-                        "{asset} | {timeFrame} | {indicator} | {lastClose} | could not get indicators from Database",
+                        "{Asset} | {TimeFrame} | {Indicator} | {LastClose} | could not get indicators from Database",
                         Enums.Assets.Btcusdt.GetStringValue(),
                         Enums.TimeFrames.M5.GetStringValue(),
                         asset.Item3.Name,
