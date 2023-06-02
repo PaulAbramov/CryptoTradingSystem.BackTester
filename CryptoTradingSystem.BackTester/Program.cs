@@ -62,7 +62,8 @@ namespace CryptoTradingSystem.BackTester
         {
             var strategyDll = config.GetValue<string>(StrategyDll);
 
-            if (string.IsNullOrEmpty(strategyDll))
+            if (string.IsNullOrEmpty(strategyDll) 
+                || !File.Exists(strategyDll))
             {
                 OverrideConfigFile(config);
             }
@@ -76,7 +77,7 @@ namespace CryptoTradingSystem.BackTester
 
         private static void OverrideConfigFile(IConfiguration config)
         {
-            Log.Information("Enter Path to the strategy.dll:");
+            Log.Information("Enter path (including the .dll) to the strategy.dll:");
 
             config.GetSection(StrategyDll).Value = Console.In.ReadLine();
 
@@ -135,9 +136,9 @@ namespace CryptoTradingSystem.BackTester
                 return;
             }
 
+            var tradestatus = Enums.TradeStatus.Closed;
             while (true)
             {
-                var tradestatus = Enums.TradeStatus.Closed;
                 var results = GetDataFromDatabase(strategyParameter, connectionString);
 
                 try
@@ -146,38 +147,35 @@ namespace CryptoTradingSystem.BackTester
                     switch (tradeType)
                     {
                         case Enums.TradeType.None:
-                            continue;
+                            break;
                         case Enums.TradeType.Buy:
-                            Log.Warning("Buy {AssetName} at {CloseTime}",
+                            Log.Warning("Buy {AssetName} at {CloseTime} | SMA5 : {SMA5} | SMA75: {SMA75} | Price: {CandleClose}",
                                 strategyParameter.AssetToBuy,
-                                results.FirstOrDefault()?.CloseTime);
+                                results.FirstOrDefault()?.CloseTime,
+                                ((SMA)results[0]).SMA5,
+                                ((SMA)results[1]).SMA75,
+                                results[0].Asset.CandleClose);
+                            tradestatus = Enums.TradeStatus.Open;
                             break;
                         case Enums.TradeType.Sell:
-                            Log.Warning("Sell {AssetName} at {CloseTime}",
+                            Log.Warning("Sell {AssetName} at {CloseTime} | SMA5 : {SMA5} | SMA75: {SMA75} | Price: {CandleClose}",
                                 strategyParameter.AssetToBuy,
-                                results.FirstOrDefault()?.CloseTime);
+                                results.FirstOrDefault()?.CloseTime,
+                                ((SMA)results[0]).SMA5,
+                                ((SMA)results[1]).SMA75,
+                                results[0].Asset.CandleClose);
+                            tradestatus = Enums.TradeStatus.Closed;
                             break;
                         default:
                             throw new ArgumentOutOfRangeException();
                     }
+                    
+                    strategyParameter.TimeFrameStart = results.Min(x => x.CloseTime);
                 }
                 catch (Exception e)
                 {
                     Log.Error(e, "An Error appeared while executing the Strategy");
-                }
-                
-                if (results.Count == strategyParameter.Assets.Count)
-                {
-                    // check all assets for their closetime, compare them and increase the smallest closetime by its interval
-                    var smallestCloseTime = results.Min(x => x.CloseTime);
-                    var smallestInterval = results.Min(x => x.Interval);
-                    var smallestCloseTimeAsset = results.FirstOrDefault(x => x.CloseTime == smallestCloseTime);
-                    if (smallestCloseTimeAsset is null)
-                    {
-                        Log.Error("Could not find the smallest closetime asset");
-                        return;
-                    }
-                    smallestCloseTimeAsset.CloseTime = smallestCloseTime.AddSeconds(smallestInterval);
+                    return;
                 }
             }
         }
