@@ -35,42 +35,47 @@ public class MySQLDatabaseHandler : IDatabaseHandlerBackTester
         DateTime lastCloseTime = new DateTime()) 
         where T : Indicator
     {
-            try
+        if (lastCloseTime == DateTime.MinValue)
+        {
+            lastCloseTime = DateTime.MaxValue;
+        }
+        
+        try
+        {
+            using var contextDb = new CryptoTradingSystemContext(_connectionString);
+
+            var property = typeof(CryptoTradingSystemContext).GetProperty($"{indicator.Name}s");
+
+            if (property != null)
             {
-                using var contextDb = new CryptoTradingSystemContext(_connectionString);
+                Log.Debug("{PropertyName} does match {Indicator}", property.Name, indicator.Name);
 
-                var property = typeof(CryptoTradingSystemContext).GetProperty($"{indicator.Name}s");
-
-                if (property != null)
+                var dbset = (DbSet<T>)property.GetValue(contextDb);
+                if (dbset != null)
                 {
-                    Log.Debug("{PropertyName} does match {Indicator}", property.Name, indicator.Name);
+                    var indicatorValue = dbset.Include(x => x.Asset)
+                        .FirstOrDefault(x => x.AssetName == asset.GetStringValue()
+                                             && x.Interval == timeFrame.GetStringValue()
+                                             && x.CloseTime > firstCloseTime
+                                             && x.CloseTime <= lastCloseTime);
 
-                    var dbset = (DbSet<T>)property.GetValue(contextDb);
-                    if (dbset != null)
-                    {
-                        var indicatorValue = dbset
-                            .FirstOrDefault(x => x.AssetName == asset.GetStringValue()
-                                                 && x.Interval == timeFrame.GetStringValue()
-                                                 && x.CloseTime >= firstCloseTime
-                                                 && x.CloseTime >= lastCloseTime);
-
-                        return indicatorValue;
-                    }
+                    return indicatorValue;
                 }
             }
-            catch (Exception e)
-            {
-                Log.Error(
-                    e,
-                    "{Asset} | {TimeFrame} | {Indicator} | {FirstClose} | {LastClose} | could not get candles from Database", 
-                    asset.GetStringValue(), 
-                    timeFrame.GetStringValue(), 
-                    indicator.Name,
-                    firstCloseTime,
-                    lastCloseTime);
-                throw;
-            }
+        }
+        catch (Exception e)
+        {
+            Log.Error(
+                e,
+                "{Asset} | {TimeFrame} | {Indicator} | {FirstClose} | {LastClose} | could not get candles from Database", 
+                asset.GetStringValue(), 
+                timeFrame.GetStringValue(), 
+                indicator.Name,
+                firstCloseTime,
+                lastCloseTime);
+            throw;
+        }
 
-            return null;
+        return null;
     }
 }
