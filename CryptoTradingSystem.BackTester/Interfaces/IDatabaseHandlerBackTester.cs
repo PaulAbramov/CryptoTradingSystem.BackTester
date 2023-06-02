@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using CryptoTradingSystem.General.Data;
 using CryptoTradingSystem.General.Database.Models;
 
