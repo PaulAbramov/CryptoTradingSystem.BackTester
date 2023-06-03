@@ -19,9 +19,6 @@ namespace CryptoTradingSystem.BackTester
         private const string connectionString = "ConnectionString";
         private const string loggingLocation = "LoggingLocation";
 
-        private static int cursor = 0;
-        private static List<int> selectedDllIndex = new List<int>();
-
         private static void Main()
         {
             IConfiguration config = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
@@ -41,81 +38,9 @@ namespace CryptoTradingSystem.BackTester
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
 
-            
-            var dllPathsSection = config.GetSection("DllPaths");
-            var dllPaths = dllPathsSection.GetChildren().ToDictionary(x => x.Key, x => x.Value);
-
             var menu = new MainMenu();
             menu.StartMainMenu(config);
             return;
-            
-while (true)
-{
-    Console.WriteLine("Select an option:");
-    Console.WriteLine("1. Add .dll file path");
-    Console.WriteLine("2. Remove .dll file path");
-    Console.WriteLine("3. Execute selected .dll files");
-    Console.WriteLine("4. Exit");
-
-    var option = Console.ReadLine();
-
-    switch (option)
-    {
-        case "1":
-            Console.WriteLine("Enter the path to the .dll file:");
-            var test = Console.ReadLine();
-            dllPaths[(new FileInfo(test)).Name] = test;
-            //UpdateAppSettings(dllPaths);
-            Console.WriteLine("Path added successfully!");
-            break;
-        case "2":
-            Console.WriteLine("Enter the name of the .dll file to remove:");
-            var dllToRemove = Console.ReadLine();
-            if (dllPaths.ContainsKey(dllToRemove))
-            {
-                dllPaths.Remove(dllToRemove);
-                //UpdateAppSettings(dllPaths);
-                Console.WriteLine("Path removed successfully!");
-            }
-            else
-            {
-                Console.WriteLine($"No path found for {dllToRemove}.");
-            }
-            break;
-        case "3":
-            Console.WriteLine("Enter the names of the .dll files you want to execute (comma-separated):");
-            var selectedDlls = Console.ReadLine()?.Split(',');
-
-            // Execute the selected .dll files
-            foreach (var selectedDll in selectedDlls)
-            {
-                if (dllPaths.TryGetValue(selectedDll.Trim(), out var dllPath))
-                {
-                    // Execute the .dll file using appropriate mechanism (e.g., reflection)
-                }
-                else
-                {
-                    Console.WriteLine($"Invalid .dll file: {selectedDll}");
-                }
-            }
-            break;
-        case "4":
-            Console.WriteLine("Exiting...");
-            return;
-        default:
-            Console.WriteLine("Invalid option. Please try again.");
-            break;
-    }
-}
-            
-            
-            // Get the path to the strategy.dll
-            var strategyDll = GetStrategyDllPath(config);
-            if (strategyDll is null)
-            {
-                Log.Error("No path to strategyDLL found in appsettings.json, please check the file");
-                return;
-            }
             
             var connectionString = config.GetValue<string>(Program.connectionString);
             if (string.IsNullOrWhiteSpace(connectionString))
@@ -127,40 +52,6 @@ while (true)
             ExecuteStrategy(strategyDll, connectionString);
         }
         
-        private static string? GetStrategyDllPath(IConfiguration config)
-        {
-            var strategyDll = config.GetValue<string>(Program.strategyDll);
-
-            if (string.IsNullOrEmpty(strategyDll) 
-                || !File.Exists(strategyDll))
-            {
-                OverrideConfigFile(config);
-            }
-
-            strategyDll = config.GetValue<string>(Program.strategyDll);
-
-            Log.Debug("Looking for strategy.dll in path: {StrategyDll}", strategyDll);
-
-            return strategyDll;
-        }
-
-        private static void OverrideConfigFile(IConfiguration config)
-        {
-            Log.Information("Enter path (including the .dll) to the strategy.dll:");
-
-            config.GetSection(strategyDll).Value = Console.In.ReadLine();
-
-            var jsonWriteOptions = new JsonSerializerOptions()
-            {
-                WriteIndented = true
-            };
-
-            var configAsDict = config.AsEnumerable().ToDictionary(c => c.Key, c => c.Value);
-            var json = JsonSerializer.Serialize(configAsDict, jsonWriteOptions);
-
-            File.WriteAllText("appsettings.json", json);
-        }
-
         private static void ExecuteStrategy(string strategyDll, string connectionString)
         {
             // Load methods "ExecuteStrategy" and "SetupStrategyParameter" from strategy.dll
@@ -299,29 +190,5 @@ while (true)
 
             return results;
         }
-        
-        private static string GetSelectedDllPaths(List<string> dllPaths)
-        {
-            return dllPaths[cursor];
-        }
-        
-        /*
-        private static void UpdateAppSettings(Dictionary<string, string> dllPaths)
-        {
-            var appSettingsPath = "appsettings.json";
-            var json = File.ReadAllText(appSettingsPath);
-            var jsonObj = JObject.Parse(json);
-
-            var dllPathsSection = jsonObj.GetValue("DllPaths") as JObject;
-            dllPathsSection.RemoveAll();
-
-            foreach (var dllPath in dllPaths)
-            {
-                dllPathsSection.Add(dllPath.Key, dllPath.Value);
-            }
-
-            File.WriteAllText(appSettingsPath, jsonObj.ToString());
-        }
-        */
     }
 }

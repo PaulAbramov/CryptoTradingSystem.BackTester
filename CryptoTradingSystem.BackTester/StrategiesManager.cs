@@ -12,8 +12,8 @@ namespace CryptoTradingSystem.BackTester;
 public class StrategiesManager
 {
     private int selectedOption;
-    private List<StrategyOption>? strategies = new List<StrategyOption>();
-    private readonly List<StrategyOption> defaultMenuOptions = new List<StrategyOption>()
+    private List<StrategyOption>? strategies = new();
+    private readonly List<StrategyOption> defaultMenuOptions = new()
     {
         new StrategyOption { Name = "Add Strategy" },
         new StrategyOption { Name = "Remove selected Strategy" },
@@ -44,7 +44,7 @@ public class StrategiesManager
                     }
                     else
                     {
-                        Log.Debug($"{strategies[selectedOption].Name} selected");
+                        Log.Debug($"{strategies?[selectedOption].Name} selected");
                         if (selectedOption < strategies?.Count - 3)
                         {
                             if (strategies != null)
@@ -110,12 +110,13 @@ public class StrategiesManager
     {
         Log.Information("Pass the absolute path to the .dll file:");
         var path = Console.ReadLine();
-        var filename = (new FileInfo(path)).Name;
-
         if (string.IsNullOrWhiteSpace(path))
         {
             return;
         }
+
+        var filename = (new FileInfo(path)).Name;
+
         
         var strategiesInConfig = SettingsHelper.GetStrategyOptions(config);
         
@@ -124,7 +125,7 @@ public class StrategiesManager
         {
             return;
         }
-        strategiesInConfig?.Add(new StrategyOption() { Name = filename, Path = path, Enabled = false});
+        strategiesInConfig?.Add(new StrategyOption { Name = filename, Path = path, Enabled = false});
 
         SettingsHelper.UpdateAppSettings(config, strategiesInConfig);
         
