@@ -4,9 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
-
 using CryptoTradingSystem.General.Data;
-using CryptoTradingSystem.General.Database;
 using CryptoTradingSystem.General.Database.Models;
 using CryptoTradingSystem.General.Strategy;
 
@@ -17,15 +15,18 @@ namespace CryptoTradingSystem.BackTester
 {
     internal static class Program
     {
-        private const string StrategyDll = "StrategyDll";
-        private const string ConnectionString = "ConnectionString";
-        private const string LoggingLocation = "LoggingLocation";
+        private const string strategyDll = "StrategyDll";
+        private const string connectionString = "ConnectionString";
+        private const string loggingLocation = "LoggingLocation";
+
+        private static int cursor = 0;
+        private static List<int> selectedDllIndex = new List<int>();
 
         private static void Main()
         {
             IConfiguration config = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
 
-            var loggingfilePath = config.GetValue<string>(LoggingLocation);
+            var loggingfilePath = config.GetValue<string>(loggingLocation);
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
 #if RELEASE
@@ -40,6 +41,74 @@ namespace CryptoTradingSystem.BackTester
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
 
+            
+            var dllPathsSection = config.GetSection("DllPaths");
+            var dllPaths = dllPathsSection.GetChildren().ToDictionary(x => x.Key, x => x.Value);
+
+            var menu = new MainMenu();
+            menu.StartMainMenu(config);
+            return;
+            
+while (true)
+{
+    Console.WriteLine("Select an option:");
+    Console.WriteLine("1. Add .dll file path");
+    Console.WriteLine("2. Remove .dll file path");
+    Console.WriteLine("3. Execute selected .dll files");
+    Console.WriteLine("4. Exit");
+
+    var option = Console.ReadLine();
+
+    switch (option)
+    {
+        case "1":
+            Console.WriteLine("Enter the path to the .dll file:");
+            var test = Console.ReadLine();
+            dllPaths[(new FileInfo(test)).Name] = test;
+            //UpdateAppSettings(dllPaths);
+            Console.WriteLine("Path added successfully!");
+            break;
+        case "2":
+            Console.WriteLine("Enter the name of the .dll file to remove:");
+            var dllToRemove = Console.ReadLine();
+            if (dllPaths.ContainsKey(dllToRemove))
+            {
+                dllPaths.Remove(dllToRemove);
+                //UpdateAppSettings(dllPaths);
+                Console.WriteLine("Path removed successfully!");
+            }
+            else
+            {
+                Console.WriteLine($"No path found for {dllToRemove}.");
+            }
+            break;
+        case "3":
+            Console.WriteLine("Enter the names of the .dll files you want to execute (comma-separated):");
+            var selectedDlls = Console.ReadLine()?.Split(',');
+
+            // Execute the selected .dll files
+            foreach (var selectedDll in selectedDlls)
+            {
+                if (dllPaths.TryGetValue(selectedDll.Trim(), out var dllPath))
+                {
+                    // Execute the .dll file using appropriate mechanism (e.g., reflection)
+                }
+                else
+                {
+                    Console.WriteLine($"Invalid .dll file: {selectedDll}");
+                }
+            }
+            break;
+        case "4":
+            Console.WriteLine("Exiting...");
+            return;
+        default:
+            Console.WriteLine("Invalid option. Please try again.");
+            break;
+    }
+}
+            
+            
             // Get the path to the strategy.dll
             var strategyDll = GetStrategyDllPath(config);
             if (strategyDll is null)
@@ -48,7 +117,7 @@ namespace CryptoTradingSystem.BackTester
                 return;
             }
             
-            var connectionString = config.GetValue<string>(ConnectionString);
+            var connectionString = config.GetValue<string>(Program.connectionString);
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 Log.Error("No ConnectionString found in appsettings.json, please check the file");
@@ -60,7 +129,7 @@ namespace CryptoTradingSystem.BackTester
         
         private static string? GetStrategyDllPath(IConfiguration config)
         {
-            var strategyDll = config.GetValue<string>(StrategyDll);
+            var strategyDll = config.GetValue<string>(Program.strategyDll);
 
             if (string.IsNullOrEmpty(strategyDll) 
                 || !File.Exists(strategyDll))
@@ -68,7 +137,7 @@ namespace CryptoTradingSystem.BackTester
                 OverrideConfigFile(config);
             }
 
-            strategyDll = config.GetValue<string>(StrategyDll);
+            strategyDll = config.GetValue<string>(Program.strategyDll);
 
             Log.Debug("Looking for strategy.dll in path: {StrategyDll}", strategyDll);
 
@@ -79,7 +148,7 @@ namespace CryptoTradingSystem.BackTester
         {
             Log.Information("Enter path (including the .dll) to the strategy.dll:");
 
-            config.GetSection(StrategyDll).Value = Console.In.ReadLine();
+            config.GetSection(strategyDll).Value = Console.In.ReadLine();
 
             var jsonWriteOptions = new JsonSerializerOptions()
             {
@@ -149,21 +218,17 @@ namespace CryptoTradingSystem.BackTester
                         case Enums.TradeType.None:
                             break;
                         case Enums.TradeType.Buy:
-                            Log.Warning("Buy {AssetName} at {CloseTime} | SMA5 : {SMA5} | SMA75: {SMA75} | Price: {CandleClose}",
+                            Log.Warning("Buy {AssetName} at {CloseTime}| Price: {CandleClose}",
                                 strategyParameter.AssetToBuy,
-                                results.FirstOrDefault()?.CloseTime,
-                                ((SMA)results[0]).SMA5,
-                                ((SMA)results[1]).SMA75,
-                                results[0].Asset.CandleClose);
+                                results[0].CloseTime,
+                                results[0].Asset?.CandleClose);
                             tradestatus = Enums.TradeStatus.Open;
                             break;
                         case Enums.TradeType.Sell:
-                            Log.Warning("Sell {AssetName} at {CloseTime} | SMA5 : {SMA5} | SMA75: {SMA75} | Price: {CandleClose}",
+                            Log.Warning("Sell {AssetName} at {CloseTime} | Price: {CandleClose}",
                                 strategyParameter.AssetToBuy,
-                                results.FirstOrDefault()?.CloseTime,
-                                ((SMA)results[0]).SMA5,
-                                ((SMA)results[1]).SMA75,
-                                results[0].Asset.CandleClose);
+                                results[0].CloseTime,
+                                results[0].Asset?.CandleClose);
                             tradestatus = Enums.TradeStatus.Closed;
                             break;
                         default:
@@ -234,5 +299,29 @@ namespace CryptoTradingSystem.BackTester
 
             return results;
         }
+        
+        private static string GetSelectedDllPaths(List<string> dllPaths)
+        {
+            return dllPaths[cursor];
+        }
+        
+        /*
+        private static void UpdateAppSettings(Dictionary<string, string> dllPaths)
+        {
+            var appSettingsPath = "appsettings.json";
+            var json = File.ReadAllText(appSettingsPath);
+            var jsonObj = JObject.Parse(json);
+
+            var dllPathsSection = jsonObj.GetValue("DllPaths") as JObject;
+            dllPathsSection.RemoveAll();
+
+            foreach (var dllPath in dllPaths)
+            {
+                dllPathsSection.Add(dllPath.Key, dllPath.Value);
+            }
+
+            File.WriteAllText(appSettingsPath, jsonObj.ToString());
+        }
+        */
     }
 }
