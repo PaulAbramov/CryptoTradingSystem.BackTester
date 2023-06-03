@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.Json;
 using CryptoTradingSystem.General.Data;
 using CryptoTradingSystem.General.Database.Models;
 using CryptoTradingSystem.General.Strategy;
@@ -15,15 +14,11 @@ namespace CryptoTradingSystem.BackTester
 {
     internal static class Program
     {
-        private const string strategyDll = "StrategyDll";
-        private const string connectionString = "ConnectionString";
-        private const string loggingLocation = "LoggingLocation";
-
         private static void Main()
         {
-            IConfiguration config = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
+            IConfiguration config = new ConfigurationBuilder().AddJsonFile(SettingsHelper.AppsettingsFile).Build();
 
-            var loggingfilePath = config.GetValue<string>(loggingLocation);
+            var loggingfilePath = config.GetValue<string>(SettingsHelper.LoggingLocation);
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
 #if RELEASE
@@ -42,14 +37,14 @@ namespace CryptoTradingSystem.BackTester
             menu.StartMainMenu(config);
             return;
             
-            var connectionString = config.GetValue<string>(Program.connectionString);
+            var connectionString = config.GetValue<string>(SettingsHelper.ConnectionString);
             if (string.IsNullOrWhiteSpace(connectionString))
             {
                 Log.Error("No ConnectionString found in appsettings.json, please check the file");
                 return;
             }
             
-            ExecuteStrategy(strategyDll, connectionString);
+            //ExecuteStrategy(strategyDll, connectionString);
         }
         
         private static void ExecuteStrategy(string strategyDll, string connectionString)

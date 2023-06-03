@@ -8,9 +8,14 @@ namespace CryptoTradingSystem.BackTester;
 
 public static class SettingsHelper
 {
+    private const string strategySection = "StrategyDlls";
+    public const string AppsettingsFile = "appsettings.json";
+    public const string LoggingLocation = "LoggingLocation";
+    public const string ConnectionString = "ConnectionString";
+
     public static List<StrategyOption>? GetStrategyOptions(IConfiguration config)
     {
-        var dllPathsSection = config.GetSection("StrategyDlls");
+        var dllPathsSection = config.GetSection(strategySection);
         var strategiesInConfig = new List<StrategyOption>();
         if (dllPathsSection.Value != null)
         {
@@ -20,7 +25,7 @@ public static class SettingsHelper
         return strategiesInConfig;
     }
     
-    public static void UpdateAppSettings(IConfiguration config, List<StrategyOption>? strategiesInConfig)
+    public static void UpdateStrategyOptions(IConfiguration config, List<StrategyOption>? strategiesInConfig)
     {
         var jsonWriteOptions = new JsonSerializerOptions()
         {
@@ -28,13 +33,13 @@ public static class SettingsHelper
         };
         
         var strategiesJson = JsonSerializer.Serialize(strategiesInConfig, jsonWriteOptions);
-        config["StrategyDlls"] = strategiesJson;
+        config[strategySection] = strategiesJson;
 
         var configAsDict = config
             .AsEnumerable()
             .ToDictionary(c => c.Key, c => c.Value);
         var json = JsonSerializer.Serialize(configAsDict, jsonWriteOptions);
 
-        File.WriteAllText("appsettings.json", json);
+        File.WriteAllText(AppsettingsFile, json);
     }
 }

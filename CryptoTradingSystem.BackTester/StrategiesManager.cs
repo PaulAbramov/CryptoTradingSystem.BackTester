@@ -127,7 +127,7 @@ public class StrategiesManager
         }
         strategiesInConfig?.Add(new StrategyOption { Name = filename, Path = path, Enabled = false});
 
-        SettingsHelper.UpdateAppSettings(config, strategiesInConfig);
+        SettingsHelper.UpdateStrategyOptions(config, strategiesInConfig);
         
         Log.Debug("Added Strategy: {Strategy} | {PathToStrategy}", 
             filename, 
@@ -152,7 +152,7 @@ public class StrategiesManager
         
         strategy.Enabled = !strategy.Enabled;
 
-        SettingsHelper.UpdateAppSettings(config, strategiesInConfig);
+        SettingsHelper.UpdateStrategyOptions(config, strategiesInConfig);
         
         Log.Debug("Updated Strategy: {Strategy} | {PathToStrategy}", 
             strategy.Name, 
