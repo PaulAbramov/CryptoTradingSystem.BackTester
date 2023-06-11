@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
+using CryptoTradingSystem.General.Data;
 using CryptoTradingSystem.General.Helper;
 using Microsoft.Extensions.Configuration;
 using Serilog;
@@ -13,6 +13,8 @@ public class StrategiesManager
 {
     private int selectedOption;
     private List<StrategyOption>? strategies = new();
+    
+    private readonly IConfiguration config;
     private readonly List<StrategyOption> defaultMenuOptions = new()
     {
         new StrategyOption { Name = "Add Strategy" },
@@ -20,12 +22,17 @@ public class StrategiesManager
         new StrategyOption { Name = "Back" }
     };
 
-    public void ManageStrategies(IConfiguration config)
+    public StrategiesManager(IConfiguration config)
     {
-        bool exit = false;
+        this.config = config;
+    }
+
+    public void ManageStrategies()
+    {
+        var exit = false;
         while (!exit)
         {
-            DrawStrategiesMenu(config);
+            DrawStrategiesMenu();
             
             var keyInfo = Console.ReadKey(true);
 
@@ -37,25 +44,27 @@ public class StrategiesManager
                     break;
 
                 case ConsoleKey.Enter:
-                    if (selectedOption == strategies?.Count - 1)
+                    if (selectedOption == strategies?.Count - 3)
+                    {
+                        AddStrategy(config);
+                        selectedOption = strategies!.Count - 3;
+                    }
+                    else if (selectedOption == strategies?.Count - 2)
+                    {
+                        //TODO make sure you cant delete running Strategy
+                        DeleteMarkedStrategies(config);
+                        selectedOption = strategies!.Count - 2;
+                    }
+                    else if (selectedOption == strategies?.Count - 1)
                     {
                         // Exit the program
                         exit = true;
                     }
                     else
                     {
-                        Log.Debug($"{strategies?[selectedOption].Name} selected");
-                        if (selectedOption < strategies?.Count - 3)
+                        if (strategies != null)
                         {
-                            if (strategies != null)
-                            {
-                                strategies[selectedOption].Enabled = true;
-                                ToggleStrategy(config, strategies[selectedOption].Name);
-                            }
-                        }
-                        else if (selectedOption == strategies?.Count - 3)
-                        {
-                            AddStrategy(config);
+                            ToggleStrategy(config, strategies[selectedOption].Name);
                         }
                     }
                     break;
@@ -63,42 +72,40 @@ public class StrategiesManager
         }
     }
     
-    private void DrawStrategiesMenu(IConfiguration config)
+    private void DrawStrategiesMenu()
     {
-        Console.Clear();
-        GetStrategyDlls(config);
-
         var originalForegroundColor = Console.ForegroundColor;
+
+        Console.Clear();
+        Console.WriteLine("Strategies can be marked in 3 states: gray, green, red");
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("Green marked strategies are activated.");
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("Red marked strategies are marked to delete.");
+        Console.ForegroundColor = originalForegroundColor;
+
+        LoadStrategyDlls();
+
         for (var i = 0; i < strategies?.Count; i++)
         {
             Console.Write(selectedOption == i ? ">> " : "   ");
 
-            if (strategies[i].Enabled)
+            Console.ForegroundColor = strategies[i].ActivityState switch
             {
-                Console.ForegroundColor = ConsoleColor.Green;
-            }
+                EStrategyActivityState.Enabled => ConsoleColor.Green,
+                EStrategyActivityState.ToDelete => ConsoleColor.Red,
+                _ => originalForegroundColor
+            };
             
             Console.WriteLine($"{strategies[i].Name}");
-
-            if (strategies[i].Enabled)
-            {
-                Console.ForegroundColor = originalForegroundColor;
-            }
+            Console.ForegroundColor = originalForegroundColor;
         }
     }
     
-    private void GetStrategyDlls(IConfiguration config)
+    private void LoadStrategyDlls()
     {
         strategies?.Clear();
-        var dllPathsSection = config.GetSection("StrategyDlls");
-        if (dllPathsSection.Value != null)
-        {
-            strategies = JsonSerializer.Deserialize<List<StrategyOption>>(dllPathsSection.Value);
-        }
-        if (strategies == null)
-        {
-            strategies = new List<StrategyOption>();
-        }
+        strategies = SettingsHelper.GetStrategyOptions(config);
         
         Log.Debug("Found following Strategies in appsettings: {strategies}",
                 string.Join(", ", strategies.Select(x => x.Name)));
@@ -110,22 +117,16 @@ public class StrategiesManager
     {
         Log.Information("Pass the absolute path to the .dll file:");
         var path = Console.ReadLine();
-        if (string.IsNullOrWhiteSpace(path))
+        if (string.IsNullOrWhiteSpace(path)
+            || !path.EndsWith(".dll"))
         {
             return;
         }
 
         var filename = (new FileInfo(path)).Name;
 
-        
         var strategiesInConfig = SettingsHelper.GetStrategyOptions(config);
-        
-        if (strategiesInConfig == null ||
-            strategiesInConfig.Count == 0)
-        {
-            return;
-        }
-        strategiesInConfig?.Add(new StrategyOption { Name = filename, Path = path, Enabled = false});
+        strategiesInConfig.Add(new StrategyOption { Name = filename, Path = path, ActivityState = EStrategyActivityState.None });
 
         SettingsHelper.UpdateStrategyOptions(config, strategiesInConfig);
         
@@ -134,12 +135,23 @@ public class StrategiesManager
             path);
     }
 
+    private static void DeleteMarkedStrategies(IConfiguration config)
+    {
+        var strategiesInConfig = SettingsHelper.GetStrategyOptions(config);
+        if (strategiesInConfig.Count == 0)
+        {
+            return;
+        }
+        
+        strategiesInConfig.RemoveAll(x => x.ActivityState == EStrategyActivityState.ToDelete);
+        SettingsHelper.UpdateStrategyOptions(config, strategiesInConfig);
+    }
+
     private static void ToggleStrategy(IConfiguration config, string strategyName)
     {
         var strategiesInConfig = SettingsHelper.GetStrategyOptions(config);
-        
-        if (strategiesInConfig == null ||
-            strategiesInConfig.Count == 0)
+
+        if (strategiesInConfig.Count == 0)
         {
             return;
         }
@@ -149,13 +161,13 @@ public class StrategiesManager
         {
             return;
         }
-        
-        strategy.Enabled = !strategy.Enabled;
+
+        strategy.ActivityState = strategy.ActivityState.Next();
 
         SettingsHelper.UpdateStrategyOptions(config, strategiesInConfig);
-        
-        Log.Debug("Updated Strategy: {Strategy} | {PathToStrategy}", 
-            strategy.Name, 
+
+        Log.Debug("Updated Strategy: {Strategy} | {PathToStrategy}",
+            strategy.Name,
             strategy.Path);
     }
 }

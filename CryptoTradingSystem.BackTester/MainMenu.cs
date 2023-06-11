@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CryptoTradingSystem.General.Helper;
 using Microsoft.Extensions.Configuration;
 
@@ -9,14 +10,39 @@ public class MainMenu
 {
     private int selectedOption;
     
-    private static readonly List<string> MenuOptions = new List<string>()
+    private readonly StrategiesManager strategiesManager;
+    private readonly StrategiesExecutor strategiesExecutor;
+    
+    private static readonly List<string> MenuOptions = new()
     {
         "Handle strategies",
         "Execute selected strategies",
+        "Stop strategies",
         "Exit"
     };
+
+    private List<string> runningStrategiesTexts = new();
+
+    public MainMenu(IConfiguration config)
+    {
+        strategiesManager = new StrategiesManager(config);
+        strategiesExecutor = new StrategiesExecutor(config);
+        strategiesExecutor.StrategyUpdateEvent += (sender, args) =>
+        {
+            runningStrategiesTexts = new List<string>();
+            
+            foreach (var statsString in from strategy in strategiesExecutor.RunningStrategies 
+                     let statsString = $"{strategy.Name.Replace(".dll", string.Empty)} running... {strategy.TradesAmount} Trades made, currently at time: {strategy.CurrentCloseDateTime}" 
+                     select statsString + (strategy.RunningTrade ? " | Running trade" : string.Empty))
+            {
+                runningStrategiesTexts.Add(statsString);
+            }
+            
+            DrawMainMenu();
+        };
+    }
     
-    public void StartMainMenu(IConfiguration config)
+    public void StartMainMenu()
     {
         var exit = false;
 
@@ -36,6 +62,7 @@ public class MainMenu
                 case ConsoleKey.Enter:
                     if (selectedOption == MenuOptions.Count - 1)
                     {
+                        // TODO end all Threads
                         // Exit the program
                         exit = true;
                     }
@@ -44,8 +71,14 @@ public class MainMenu
                         switch (selectedOption)
                         {
                             case 0:
-                                var strategiesManager = new StrategiesManager();
-                                strategiesManager.ManageStrategies(config);
+                                strategiesManager.ManageStrategies();
+                                break;
+                            case 1:
+                                strategiesExecutor.ExecuteSelectedStrategies();
+                                break;
+                            case 2:
+                                // Zeige Menü von laufenden Strategien um die zu stoppen.
+                                strategiesExecutor.StopStrategies();
                                 break;
                         }
                     }
@@ -65,5 +98,14 @@ public class MainMenu
 
             Console.WriteLine(MenuOptions[i]);
         }
+
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        foreach (var runningStrategy in runningStrategiesTexts)
+        {
+            Console.Write("   ");
+            Console.WriteLine(runningStrategy);
+        }
+
+        Console.ResetColor();
     }
 }

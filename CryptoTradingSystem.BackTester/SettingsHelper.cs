@@ -13,7 +13,12 @@ public static class SettingsHelper
     public const string LoggingLocation = "LoggingLocation";
     public const string ConnectionString = "ConnectionString";
 
-    public static List<StrategyOption>? GetStrategyOptions(IConfiguration config)
+    public static List<StrategyOption> GetEnabledStrategyOptions(IConfiguration config)
+    {
+        return GetStrategyOptions(config).Where(x => x.ActivityState == EStrategyActivityState.Enabled).ToList();
+    }
+    
+    public static List<StrategyOption> GetStrategyOptions(IConfiguration config)
     {
         var dllPathsSection = config.GetSection(strategySection);
         var strategiesInConfig = new List<StrategyOption>();
@@ -22,7 +27,7 @@ public static class SettingsHelper
             strategiesInConfig = JsonSerializer.Deserialize<List<StrategyOption>>(dllPathsSection.Value);
         }
 
-        return strategiesInConfig;
+        return strategiesInConfig!;
     }
     
     public static void UpdateStrategyOptions(IConfiguration config, List<StrategyOption>? strategiesInConfig)
