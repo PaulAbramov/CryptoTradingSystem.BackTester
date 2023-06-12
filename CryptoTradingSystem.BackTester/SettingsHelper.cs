@@ -15,7 +15,9 @@ public static class SettingsHelper
 
     public static List<StrategyOption> GetEnabledStrategyOptions(IConfiguration config)
     {
-        return GetStrategyOptions(config).Where(x => x.ActivityState == EStrategyActivityState.Enabled).ToList();
+        return GetStrategyOptions(config)
+            .Where(x => x.ActivityState == EStrategyActivityState.Enabled)
+            .ToList();
     }
     
     public static List<StrategyOption> GetStrategyOptions(IConfiguration config)

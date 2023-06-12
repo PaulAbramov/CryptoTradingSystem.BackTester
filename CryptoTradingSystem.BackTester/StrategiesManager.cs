@@ -9,11 +9,13 @@ using Serilog;
 
 namespace CryptoTradingSystem.BackTester;
 
-public class StrategiesManager
+public class StrategiesManager : IDisposable
 {
     private int selectedOption;
     private List<StrategyOption>? strategies = new();
     
+    private readonly List<string> runningStrategies = new();
+    private readonly StrategiesExecutor strategiesExecutor;
     private readonly IConfiguration config;
     private readonly List<StrategyOption> defaultMenuOptions = new()
     {
@@ -22,9 +24,22 @@ public class StrategiesManager
         new StrategyOption { Name = "Back" }
     };
 
-    public StrategiesManager(IConfiguration config)
+    public StrategiesManager(IConfiguration config, StrategiesExecutor strategiesExecutor)
     {
         this.config = config;
+        this.strategiesExecutor = strategiesExecutor;
+        this.strategiesExecutor.StrategyUpdateEvent += CheckStrategiesUpdates;
+    }
+
+    public void Dispose()
+    {
+        strategiesExecutor.StrategyUpdateEvent -= CheckStrategiesUpdates;
+    }
+
+    private void CheckStrategiesUpdates(object? sender, EventArgs? e)
+    {
+        runningStrategies.Clear();
+        runningStrategies.AddRange(strategiesExecutor.RunningStrategies.Select(x => x.Name));
     }
 
     public void ManageStrategies()
@@ -51,7 +66,6 @@ public class StrategiesManager
                     }
                     else if (selectedOption == strategies?.Count - 2)
                     {
-                        //TODO make sure you cant delete running Strategy
                         DeleteMarkedStrategies(config);
                         selectedOption = strategies!.Count - 2;
                     }
@@ -74,6 +88,8 @@ public class StrategiesManager
     
     private void DrawStrategiesMenu()
     {
+        CheckStrategiesUpdates(null, null);
+
         var originalForegroundColor = Console.ForegroundColor;
 
         Console.Clear();
@@ -81,7 +97,7 @@ public class StrategiesManager
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("Green marked strategies are activated.");
         Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine("Red marked strategies are marked to delete.");
+        Console.WriteLine("Red marked strategies are marked to delete. Exception are running Strategies, end them first.");
         Console.ForegroundColor = originalForegroundColor;
 
         LoadStrategyDlls();
@@ -147,9 +163,9 @@ public class StrategiesManager
         SettingsHelper.UpdateStrategyOptions(config, strategiesInConfig);
     }
 
-    private static void ToggleStrategy(IConfiguration config, string strategyName)
+    private void ToggleStrategy(IConfiguration configToUpgrade, string strategyName)
     {
-        var strategiesInConfig = SettingsHelper.GetStrategyOptions(config);
+        var strategiesInConfig = SettingsHelper.GetStrategyOptions(configToUpgrade);
 
         if (strategiesInConfig.Count == 0)
         {
@@ -164,7 +180,14 @@ public class StrategiesManager
 
         strategy.ActivityState = strategy.ActivityState.Next();
 
-        SettingsHelper.UpdateStrategyOptions(config, strategiesInConfig);
+        // do not allow to set running strategies to be deleted
+        if (strategy.ActivityState == EStrategyActivityState.ToDelete
+            && runningStrategies.Any(x => x == strategy.Name))
+        {
+            strategy.ActivityState = strategy.ActivityState.Next();
+        }
+
+        SettingsHelper.UpdateStrategyOptions(configToUpgrade, strategiesInConfig);
 
         Log.Debug("Updated Strategy: {Strategy} | {PathToStrategy}",
             strategy.Name,

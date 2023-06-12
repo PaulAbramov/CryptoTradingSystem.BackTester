@@ -2,8 +2,8 @@ namespace CryptoTradingSystem.BackTester;
 
 public class StrategyOption
 {
-    public string Name { get; set; }
-    public string Path { get; set; }
+    public string Name { get; init; }
+    public string Path { get; init; }
     public EStrategyActivityState ActivityState { get; set; }
 }
 

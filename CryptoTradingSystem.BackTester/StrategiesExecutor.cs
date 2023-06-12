@@ -12,19 +12,18 @@ using Serilog;
 
 namespace CryptoTradingSystem.BackTester;
 
-public class StrategiesExecutor
+public class StrategiesExecutor : IDisposable
 {
+    private const string exitString = "Exit";
+
     private int selectedOption;
 
     private readonly IConfiguration config;
-    private readonly Dictionary<string, CancellationTokenSource?> threads = new();
+    private readonly SortedDictionary<string, CancellationTokenSource?> threads = new();
 
     public readonly List<RunningStrategy> RunningStrategies = new();
     
-    // Declare the delegate (if using non-generic pattern).
     public delegate void StrategyUpdateEventHandler(object sender, EventArgs? e);
-
-    // Declare the event.
     public event StrategyUpdateEventHandler? StrategyUpdateEvent;
     
     public StrategiesExecutor(IConfiguration config)
@@ -32,11 +31,16 @@ public class StrategiesExecutor
         this.config = config;
     }
     
+    public void Dispose()
+    {
+        foreach (var runningThread in threads)
+        {
+            runningThread.Value?.Cancel();
+        }
+    }
+    
     /// <summary>
-    /// Erstelle Threads pro Strategy, speichere die IDs um am Ende beim Schließen die Threads zu beenden.
-    /// Wie stelle ich es am besten dar, dass ich noch aus dem Menü heraus beenden kann?
-    /// 
-    /// Drunter schreiben : {StrategieName} running... X Trades made, currently at time: {Closetime}?
+    /// Create a thread for each strategy, safe the IDs to be able to cancel the threads
     /// </summary>
     /// <exception cref="InvalidOperationException"></exception>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
@@ -54,8 +58,8 @@ public class StrategiesExecutor
         {
             return;
         }
-
-        foreach (var strategy in enabledStrategies)
+        
+        foreach (var strategy in enabledStrategies.Where(strategy => RunningStrategies.All(x => x.Name != strategy.Name)))
         {
             // Load methods "ExecuteStrategy" and "SetupStrategyParameter" from strategy.dll
             StrategyParameter strategyParameter;
@@ -201,7 +205,11 @@ public class StrategiesExecutor
     public void StopStrategies()
     {
         var exit = false;
-        threads.Add("Exit", null);
+
+        if (!threads.ContainsKey(exitString))
+        {
+            threads.Add(exitString, null);
+        }
 
         while (!exit)
         {
@@ -217,18 +225,19 @@ public class StrategiesExecutor
                     break;
 
                 case ConsoleKey.Enter:
-                    if (selectedOption == threads.Count - 1)
+                    if (threads.ElementAt(selectedOption).Key == exitString)
                     {
                         // Exit the program
+                        threads.Remove(exitString);
                         exit = true;
-                        threads.Remove("Exit");
                     }
                     else
                     {
+                        RunningStrategies.RemoveAll(x => x.Name == threads.ElementAt(selectedOption).Key);
+
                         threads.ElementAt(selectedOption).Value?.Cancel();
                         //TODO  mit "waitone" auf das Ende des Threads warten und dann erst löschen
                         threads.Remove(threads.ElementAt(selectedOption).Key);
-                        RunningStrategies.RemoveAll(x => x.Name == threads.ElementAt(selectedOption).Key);
                         
                         StrategyUpdateEvent?.Invoke(this, null);
                     }
@@ -242,12 +251,9 @@ public class StrategiesExecutor
         Console.Clear();
         Console.WriteLine("Select strategy to stop it:");
 
-        // out of range index(?)
         for (var i = 0; i < threads.Count; i++)
         {
             Console.Write(selectedOption == i ? ">> " : "   ");
-
-            // gegen null checken? falls ja, dann exit hinzufügen?
             Console.WriteLine(threads.ElementAt(i).Key);
         }
     }

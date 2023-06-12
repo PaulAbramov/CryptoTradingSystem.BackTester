@@ -6,10 +6,11 @@ using Microsoft.Extensions.Configuration;
 
 namespace CryptoTradingSystem.BackTester;
 
-public class MainMenu
+public class MainMenu : IDisposable
 {
     private int selectedOption;
-    
+    private List<string> runningStrategiesTexts = new();
+
     private readonly StrategiesManager strategiesManager;
     private readonly StrategiesExecutor strategiesExecutor;
     
@@ -21,25 +22,32 @@ public class MainMenu
         "Exit"
     };
 
-    private List<string> runningStrategiesTexts = new();
-
     public MainMenu(IConfiguration config)
     {
-        strategiesManager = new StrategiesManager(config);
         strategiesExecutor = new StrategiesExecutor(config);
-        strategiesExecutor.StrategyUpdateEvent += (sender, args) =>
+        strategiesManager = new StrategiesManager(config, strategiesExecutor);
+        strategiesExecutor.StrategyUpdateEvent += CheckStrategiesUpdates;
+    }
+    
+    public void Dispose()
+    {
+        strategiesExecutor.StrategyUpdateEvent -= CheckStrategiesUpdates;
+        strategiesManager.Dispose();
+        
+    }
+    
+    private void CheckStrategiesUpdates(object sender, EventArgs? e)
+    {
+        runningStrategiesTexts = new List<string>();
+            
+        foreach (var statsString in from strategy in strategiesExecutor.RunningStrategies 
+                 let statsString = $"{strategy.Name.Replace(".dll", string.Empty)} running... {strategy.TradesAmount} Trades made, currently at time: {strategy.CurrentCloseDateTime}" 
+                 select statsString + (strategy.RunningTrade ? " | Running trade" : string.Empty))
         {
-            runningStrategiesTexts = new List<string>();
+            runningStrategiesTexts.Add(statsString);
+        }
             
-            foreach (var statsString in from strategy in strategiesExecutor.RunningStrategies 
-                     let statsString = $"{strategy.Name.Replace(".dll", string.Empty)} running... {strategy.TradesAmount} Trades made, currently at time: {strategy.CurrentCloseDateTime}" 
-                     select statsString + (strategy.RunningTrade ? " | Running trade" : string.Empty))
-            {
-                runningStrategiesTexts.Add(statsString);
-            }
-            
-            DrawMainMenu();
-        };
+        DrawMainMenu();
     }
     
     public void StartMainMenu()
@@ -77,7 +85,7 @@ public class MainMenu
                                 strategiesExecutor.ExecuteSelectedStrategies();
                                 break;
                             case 2:
-                                // Zeige Menü von laufenden Strategien um die zu stoppen.
+                                // Show menu of running strategies to be able to stop chosen ones
                                 strategiesExecutor.StopStrategies();
                                 break;
                         }
