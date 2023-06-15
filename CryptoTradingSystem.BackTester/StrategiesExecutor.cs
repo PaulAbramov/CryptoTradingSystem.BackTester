@@ -22,7 +22,7 @@ public class StrategiesExecutor : IDisposable
     private readonly SortedDictionary<string, CancellationTokenSource?> threads = new();
 
     public readonly List<RunningStrategy> RunningStrategies = new();
-    
+
     public delegate void StrategyUpdateEventHandler(object sender, EventArgs? e);
     public event StrategyUpdateEventHandler? StrategyUpdateEvent;
     

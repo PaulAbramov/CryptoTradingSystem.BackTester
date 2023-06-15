@@ -33,7 +33,7 @@ public class MainMenu : IDisposable
     {
         strategiesExecutor.StrategyUpdateEvent -= CheckStrategiesUpdates;
         strategiesManager.Dispose();
-        
+        strategiesExecutor.Dispose();
     }
     
     private void CheckStrategiesUpdates(object sender, EventArgs? e)
@@ -46,8 +46,6 @@ public class MainMenu : IDisposable
         {
             runningStrategiesTexts.Add(statsString);
         }
-            
-        DrawMainMenu();
     }
     
     public void StartMainMenu()
@@ -70,7 +68,6 @@ public class MainMenu : IDisposable
                 case ConsoleKey.Enter:
                     if (selectedOption == MenuOptions.Count - 1)
                     {
-                        // TODO end all Threads
                         // Exit the program
                         exit = true;
                     }

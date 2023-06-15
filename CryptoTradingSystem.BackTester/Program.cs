@@ -1,12 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using CryptoTradingSystem.General.Data;
-using CryptoTradingSystem.General.Database.Models;
-using CryptoTradingSystem.General.Strategy;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Serilog;
 
 namespace CryptoTradingSystem.BackTester
@@ -34,6 +26,8 @@ namespace CryptoTradingSystem.BackTester
 
             var menu = new MainMenu(config);
             menu.StartMainMenu();
+            
+            menu.Dispose();
         }
     }
 }
