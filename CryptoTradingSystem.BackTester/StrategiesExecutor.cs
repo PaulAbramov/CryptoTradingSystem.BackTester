@@ -1,4 +1,5 @@
 using CryptoTradingSystem.General.Data;
+using CryptoTradingSystem.General.Database.Models;
 using CryptoTradingSystem.General.Helper;
 using CryptoTradingSystem.General.Strategy;
 using Microsoft.Extensions.Configuration;
@@ -64,20 +65,110 @@ public class StrategiesExecutor : IDisposable
 
         foreach (var strategy in enabledStrategies.Where(strategy => RunningStrategies.All(x => x.Name != strategy.Name)))
         {
-            var executionParameter = GetExecutionParameter(strategy.Path);
-            if (executionParameter is null)
-            {
-                continue;
-            }
-
-            if (executionParameter?.Item1?.Assets.Count == 0)
-            {
-                Log.Error("No Assets requested in Strategyparameter");
-                continue;
-            }
-
-            StartStrategy(strategy.Name, connectionString, executionParameter!);
+            SetupStrategyExecution(strategy, connectionString);
         }
+    }
+
+    public async Task StopStrategiesMenu()
+    {
+        var exit = false;
+
+        if (threads.All(x => x.Key.Name != exitString))
+        {
+            // Add exit option
+            threads.Add(new Thread(() => { }) { Name = exitString }, null);
+        }
+
+        while (!exit)
+        {
+            DrawRunningStrategies();
+
+            var keyInfo = Console.ReadKey(true);
+            exit = await HandleKeyInput(keyInfo.Key);
+        }
+    }
+
+    private void DrawRunningStrategies()
+    {
+        Console.Clear();
+        Console.WriteLine("Select strategy to stop it:");
+
+        for (var i = 0; i < threads.Count; i++)
+        {
+            Console.Write(selectedOption == i ? ">> " : "   ");
+            Console.WriteLine(threads.ElementAt(i).Key);
+        }
+    }
+
+    private async Task<bool> HandleKeyInput(ConsoleKey key)
+    {
+        switch (key)
+        {
+            case ConsoleKey.UpArrow:
+            case ConsoleKey.DownArrow:
+                ConsoleHelper.HandleArrowKey(key, threads.Keys.ToList(), ref selectedOption);
+                break;
+
+            case ConsoleKey.Enter:
+                await HandleEnterKey();
+                break;
+        }
+
+        return false;
+    }
+
+    private async Task<bool> HandleEnterKey()
+    {
+        var savedThread = threads.ElementAt(selectedOption).Key;
+        if (savedThread.Name == exitString)
+        {
+            // Exit the program
+            threads.Remove(savedThread);
+            return true;
+        }
+        else
+        {
+            await StopStrategy(savedThread);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Remove the thread from the lists and stop it
+    /// </summary>
+    /// <returns></returns>
+    private async Task StopStrategy(Thread savedThread)
+    {
+        RunningStrategies.RemoveAll(x => x.Name == savedThread.Name);
+
+        threads.ElementAt(selectedOption).Value?.Cancel();
+
+        while (savedThread.IsAlive)
+        {
+            await Task.Delay(200);
+        }
+        //TODO  mit "waitone" auf das Ende des Threads warten und dann erst löschen
+        threads.Remove(threads.ElementAt(selectedOption).Key);
+
+        StrategyUpdateEvent?.Invoke(this, null);
+    }
+
+    private void SetupStrategyExecution(StrategyOption strategy, string connectionString)
+    {
+        var executionParameter = GetExecutionParameter(strategy.Path);
+        if (executionParameter is null)
+        {
+            return;
+        }
+
+        if (executionParameter?.Item1?.Assets.Count == 0)
+        {
+            Log.Error("No Assets requested in Strategyparameter");
+            return;
+        }
+
+        StartStrategy(strategy.Name, connectionString, executionParameter!);
     }
 
     /// <summary>
@@ -85,7 +176,7 @@ public class StrategiesExecutor : IDisposable
     /// </summary>
     /// <param name="strategyPath"></param>
     /// <returns></returns>
-    private Tuple<StrategyParameter?, object?, MethodInfo?>? GetExecutionParameter(string strategyPath)
+    private static Tuple<StrategyParameter?, object?, MethodInfo?>? GetExecutionParameter(string strategyPath)
     {
         try
         {
@@ -146,11 +237,11 @@ public class StrategiesExecutor : IDisposable
         var newCancellationTokenSource = new CancellationTokenSource();
         var newStrategyThread = new Thread(() =>
         {
-            ExecuteStrategy(newCancellationTokenSource.Token,
-                connectionString,
+            ExecuteStrategy(connectionString,
                 (StrategyParameter)executionParameter?.Item1!,
                 executionParameter?.Item2,
-                executionParameter?.Item3);
+                executionParameter?.Item3,
+                newCancellationTokenSource.Token);
         });
 
         // Start the threads
@@ -167,11 +258,11 @@ public class StrategiesExecutor : IDisposable
         StrategyUpdateEvent?.Invoke(this, null);
     }
 
-    private void ExecuteStrategy(CancellationToken cancellationToken,
-        string connectionString,
+    private void ExecuteStrategy(string connectionString,
         StrategyParameter strategyParameter,
         object? obj,
-        MethodInfo? executeStrategyMethod)
+        MethodInfo? executeStrategyMethod,
+        CancellationToken cancellationToken)
     {
         var tradestatus = Enums.TradeStatus.Closed;
         while (true)
@@ -182,83 +273,14 @@ public class StrategiesExecutor : IDisposable
             }
 
             var results = MySQLDatabaseHandler.GetDataFromDatabase(strategyParameter, connectionString);
+            if (results is null || results.Count == 0)
+            {
+                continue;
+            }
 
             try
             {
-                var strategy = RunningStrategies.FirstOrDefault(x => x.Name == Thread.CurrentThread.Name);
-                if (strategy != null)
-                {
-                    strategy.CurrentCloseDateTime = results.Min(x => x.CloseTime);
-                }
-
-                var returnParameter = (StrategyReturnParameter)executeStrategyMethod!.Invoke(obj, new object?[] { results, tradestatus })!;
-                switch (returnParameter.TradeStatus)
-                {
-                    case Enums.TradeStatus.Open:
-                        tradestatus = Enums.TradeStatus.Open;
-
-                        switch (returnParameter.TradeType)
-                        {
-                            case Enums.TradeType.None:
-                                break;
-                            case Enums.TradeType.Buy:
-                                Log.Warning("Buy {AssetName} at {CloseTime}| Price: {CandleClose}",
-                                    strategyParameter.AssetToBuy,
-                                    results[0].CloseTime,
-                                    results[0].Asset?.CandleClose);
-                                break;
-                            case Enums.TradeType.Sell:
-                                Log.Warning("Sell {AssetName} at {CloseTime} | Price: {CandleClose}",
-                                    strategyParameter.AssetToBuy,
-                                    results[0].CloseTime,
-                                    results[0].Asset?.CandleClose);
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
-                        }
-
-                        if (strategy != null)
-                        {
-                            strategy.RunningTrade = !strategy.RunningTrade;
-                            strategy.TradeOpenPrice = results[0].Asset?.CandleClose ?? 0;
-                        }
-
-                        StrategyUpdateEvent?.Invoke(this, null);
-
-                        break;
-                    case Enums.TradeStatus.Closed:
-                        tradestatus = Enums.TradeStatus.Closed;
-
-                        switch (returnParameter.TradeType)
-                        {
-                            case Enums.TradeType.None:
-                                break;
-                            case Enums.TradeType.Buy:
-                                Log.Warning("Buy {AssetName} at {CloseTime}| Price: {CandleClose}",
-                                    strategyParameter.AssetToBuy,
-                                    results[0].CloseTime,
-                                    results[0].Asset?.CandleClose);
-
-                                SetStatisticsClosedTrades(strategy, results[0].Asset?.CandleClose, returnParameter.TradeType);
-                                break;
-                            case Enums.TradeType.Sell:
-                                Log.Warning("Sell {AssetName} at {CloseTime} | Price: {CandleClose}",
-                                    strategyParameter.AssetToBuy,
-                                    results[0].CloseTime,
-                                    results[0].Asset?.CandleClose);
-
-                                SetStatisticsClosedTrades(strategy, results[0].Asset?.CandleClose, returnParameter.TradeType);
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
-                        }
-
-                        StrategyUpdateEvent?.Invoke(this, null);
-
-                        break;
-                }
-
-                strategyParameter.TimeFrameStart = results.Min(x => x.CloseTime);
+                HandleData(results!, strategyParameter, obj, executeStrategyMethod, tradestatus);
             }
             catch (Exception e)
             {
@@ -268,76 +290,112 @@ public class StrategiesExecutor : IDisposable
         }
     }
 
-    public async Task StopStrategiesMenu()
+    private void HandleData(
+        List<Indicator?> results,
+        StrategyParameter strategyParameter,
+        object? obj,
+        MethodInfo? executeStrategyMethod,
+        Enums.TradeStatus tradestatus)
     {
-        var exit = false;
-
-        if (threads.All(x => x.Key.Name != exitString))
+        var strategy = RunningStrategies.FirstOrDefault(x => x.Name == Thread.CurrentThread.Name);
+        if (strategy == null)
         {
-            // Add exit option
-            threads.Add(new Thread(() => { }) { Name = exitString }, null);
+            return;
         }
 
-        while (!exit)
+        strategy.CurrentCloseDateTime = results.Min(x => x!.CloseTime);
+
+        var returnParameter = (StrategyReturnParameter)executeStrategyMethod!.Invoke(obj, new object?[] { results, tradestatus })!;
+        tradestatus = returnParameter.TradeStatus;
+        switch (returnParameter.TradeStatus)
         {
-            DrawRunningStrategies();
-
-            var keyInfo = Console.ReadKey(true);
-
-            switch (keyInfo.Key)
-            {
-                case ConsoleKey.UpArrow:
-                case ConsoleKey.DownArrow:
-                    ConsoleHelper.HandleArrowKey(keyInfo.Key, threads.Keys.ToList(), ref selectedOption);
-                    break;
-
-                case ConsoleKey.Enter:
-                    var savedThread = threads.ElementAt(selectedOption).Key;
-                    if (savedThread.Name == exitString)
-                    {
-                        // Exit the program
-                        threads.Remove(savedThread);
-                        exit = true;
-                    }
-                    else
-                    {
-                        await StopStrategy(savedThread);
-                    }
-                    break;
-            }
+            case Enums.TradeStatus.Open:
+                HandleOpenTrade(
+                    strategy,
+                    returnParameter.TradeType,
+                    strategyParameter.AssetToBuy,
+                    results[0]!.Asset?.CandleClose ?? 0,
+                    results[0]!.Asset!.CloseTime);
+                break;
+            case Enums.TradeStatus.Closed:
+                HandleCloseTrade(
+                    strategy,
+                    returnParameter.TradeType,
+                    strategyParameter.AssetToBuy,
+                    results[0]!.Asset?.CandleClose ?? 0,
+                    results[0]!.Asset!.CloseTime);
+                break;
         }
+
+        strategyParameter.TimeFrameStart = results.Min(x => x!.CloseTime);
     }
 
-    /// <summary>
-    /// Remove the thread from the lists and stop it
-    /// </summary>
-    /// <returns></returns>
-    private async Task StopStrategy(Thread savedThread)
+    private void HandleOpenTrade(
+        RunningStrategy strategy,
+        Enums.TradeType tradeType,
+        Enums.Assets assetToBuy,
+        decimal candleClose,
+        DateTime closeTime)
     {
-        RunningStrategies.RemoveAll(x => x.Name == savedThread.Name);
-
-        threads.ElementAt(selectedOption).Value?.Cancel();
-
-        while (savedThread.IsAlive)
+        switch (tradeType)
         {
-            await Task.Delay(200);
+            case Enums.TradeType.None:
+                break;
+            case Enums.TradeType.Buy:
+                Log.Warning("Long {AssetName} at {CloseTime}| Price: {CandleClose}",
+                    assetToBuy,
+                    closeTime,
+                    candleClose);
+                break;
+            case Enums.TradeType.Sell:
+                Log.Warning("Short {AssetName} at {CloseTime} | Price: {CandleClose}",
+                    assetToBuy,
+                    closeTime,
+                    candleClose);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
         }
-        //TODO  mit "waitone" auf das Ende des Threads warten und dann erst löschen
-        threads.Remove(threads.ElementAt(selectedOption).Key);
+
+        if (strategy != null)
+        {
+            strategy.RunningTrade = !strategy.RunningTrade;
+            strategy.TradeOpenPrice = candleClose;
+        }
 
         StrategyUpdateEvent?.Invoke(this, null);
     }
 
-    private void DrawRunningStrategies()
+    private void HandleCloseTrade(
+        RunningStrategy strategy,
+        Enums.TradeType tradeType,
+        Enums.Assets assetToBuy,
+        decimal candleClose,
+        DateTime closeTime)
     {
-        Console.Clear();
-        Console.WriteLine("Select strategy to stop it:");
-
-        for (var i = 0; i < threads.Count; i++)
+        switch (tradeType)
         {
-            Console.Write(selectedOption == i ? ">> " : "   ");
-            Console.WriteLine(threads.ElementAt(i).Key);
+            case Enums.TradeType.None:
+                break;
+            case Enums.TradeType.Buy:
+                Log.Warning("Close Short for {AssetName} at {CloseTime}| Price: {CandleClose}",
+                    assetToBuy,
+                    closeTime,
+                    candleClose);
+                break;
+            case Enums.TradeType.Sell:
+                Log.Warning("Close Long for {AssetName} at {CloseTime} | Price: {CandleClose}",
+                    assetToBuy,
+                    closeTime,
+                    candleClose);
+
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
         }
+        SetStatisticsClosedTrades(strategy, candleClose, tradeType);
+
+        StrategyUpdateEvent?.Invoke(this, null);
     }
 
     /// <summary>
@@ -346,27 +404,29 @@ public class StrategiesExecutor : IDisposable
     /// <param name="strategy"></param>
     /// <param name="candleClose"></param>
     /// <param name="tradeType"></param>
-    private void SetStatisticsClosedTrades(RunningStrategy? strategy, decimal? candleClose, Enums.TradeType tradeType)
+    private static void SetStatisticsClosedTrades(RunningStrategy? strategy, decimal? candleClose, Enums.TradeType tradeType)
     {
-        if (candleClose != null
-            && strategy != null)
+        if (candleClose == null
+            || strategy == null)
         {
-            decimal? profitLoss = 0;
-
-            if (tradeType == Enums.TradeType.Buy)
-            {
-                profitLoss = strategy.TradeOpenPrice - candleClose;
-            }
-            else if (tradeType == Enums.TradeType.Sell)
-            {
-                profitLoss = candleClose - strategy.TradeOpenPrice;
-            }
-
-            _ = profitLoss > 0 ? strategy.StrategyAnalytics.AmountOfWonTrades++ : strategy.StrategyAnalytics.AmountOfLostTrades++;
-            strategy.StrategyAnalytics.Profit += profitLoss.Value;
-
-            strategy.StrategyAnalytics.TradesAmount++;
-            strategy.RunningTrade = !strategy.RunningTrade;
+            return;
         }
+
+        decimal? profitLoss = 0;
+
+        if (tradeType == Enums.TradeType.Buy)
+        {
+            profitLoss = strategy.TradeOpenPrice - candleClose;
+        }
+        else if (tradeType == Enums.TradeType.Sell)
+        {
+            profitLoss = candleClose - strategy.TradeOpenPrice;
+        }
+
+        _ = profitLoss > 0 ? strategy.StrategyAnalytics.AmountOfWonTrades++ : strategy.StrategyAnalytics.AmountOfLostTrades++;
+        strategy.StrategyAnalytics.Profit += profitLoss.Value;
+
+        strategy.StrategyAnalytics.TradesAmount++;
+        strategy.RunningTrade = !strategy.RunningTrade;
     }
 }

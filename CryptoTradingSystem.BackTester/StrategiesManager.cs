@@ -36,12 +36,6 @@ public class StrategiesManager : IDisposable
         strategiesExecutor.StrategyUpdateEvent -= CheckStrategiesUpdates;
     }
 
-    private void CheckStrategiesUpdates(object? sender, EventArgs? e)
-    {
-        runningStrategies.Clear();
-        runningStrategies.AddRange(strategiesExecutor.RunningStrategies.Select(x => x.Name));
-    }
-
     public void ManageStrategies()
     {
         var exit = false;
@@ -50,39 +44,7 @@ public class StrategiesManager : IDisposable
             DrawStrategiesMenu();
 
             var keyInfo = Console.ReadKey(true);
-
-            switch (keyInfo.Key)
-            {
-                case ConsoleKey.UpArrow:
-                case ConsoleKey.DownArrow:
-                    ConsoleHelper.HandleArrowKey(keyInfo.Key, strategies?.ToList(), ref selectedOption);
-                    break;
-
-                case ConsoleKey.Enter:
-                    if (selectedOption == strategies?.Count - 3)
-                    {
-                        AddStrategy(config);
-                        selectedOption = strategies!.Count - 3;
-                    }
-                    else if (selectedOption == strategies?.Count - 2)
-                    {
-                        DeleteMarkedStrategies(config);
-                        selectedOption = strategies!.Count - 2;
-                    }
-                    else if (selectedOption == strategies?.Count - 1)
-                    {
-                        // Exit the program
-                        exit = true;
-                    }
-                    else
-                    {
-                        if (strategies != null)
-                        {
-                            ToggleStrategy(config, strategies[selectedOption].Name);
-                        }
-                    }
-                    break;
-            }
+            exit = HandleKeyInput(keyInfo.Key);
         }
     }
 
@@ -116,6 +78,50 @@ public class StrategiesManager : IDisposable
             Console.WriteLine($"{strategies[i].Name}");
             Console.ForegroundColor = originalForegroundColor;
         }
+    }
+
+    private void CheckStrategiesUpdates(object? sender, EventArgs? e)
+    {
+        runningStrategies.Clear();
+        runningStrategies.AddRange(strategiesExecutor.RunningStrategies.Select(x => x.Name));
+    }
+
+    private bool HandleKeyInput(ConsoleKey key)
+    {
+        switch (key)
+        {
+            case ConsoleKey.UpArrow:
+            case ConsoleKey.DownArrow:
+                ConsoleHelper.HandleArrowKey(key, strategies?.ToList(), ref selectedOption);
+                break;
+
+            case ConsoleKey.Enter:
+                if (selectedOption == strategies?.Count - 3)
+                {
+                    AddStrategy(config);
+                    selectedOption = strategies!.Count - 3;
+                }
+                else if (selectedOption == strategies?.Count - 2)
+                {
+                    DeleteMarkedStrategies(config);
+                    selectedOption = strategies!.Count - 2;
+                }
+                else if (selectedOption == strategies?.Count - 1)
+                {
+                    // Exit the program
+                    return true;
+                }
+                else
+                {
+                    if (strategies != null)
+                    {
+                        ToggleStrategy(config, strategies[selectedOption].Name);
+                    }
+                }
+                break;
+        }
+
+        return false;
     }
 
     private void LoadStrategyDlls()
@@ -166,7 +172,6 @@ public class StrategiesManager : IDisposable
     private void ToggleStrategy(IConfiguration configToUpgrade, string strategyName)
     {
         var strategiesInConfig = SettingsHelper.GetStrategyOptions(configToUpgrade);
-
         if (strategiesInConfig.Count == 0)
         {
             return;

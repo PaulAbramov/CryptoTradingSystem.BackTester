@@ -58,37 +58,7 @@ public class MainMenu : IDisposable
 
             var keyInfo = Console.ReadKey(true);
 
-            switch (keyInfo.Key)
-            {
-                case ConsoleKey.UpArrow:
-                case ConsoleKey.DownArrow:
-                    ConsoleHelper.HandleArrowKey(keyInfo.Key, MenuOptions, ref selectedOption);
-                    break;
-
-                case ConsoleKey.Enter:
-                    if (selectedOption == MenuOptions.Count - 1)
-                    {
-                        // Exit the program
-                        exit = true;
-                    }
-                    else
-                    {
-                        switch (selectedOption)
-                        {
-                            case 0:
-                                strategiesManager.ManageStrategies();
-                                break;
-                            case 1:
-                                strategiesExecutor.ExecuteSelectedStrategies();
-                                break;
-                            case 2:
-                                // Show menu of running strategies to be able to stop chosen ones
-                                strategiesExecutor.StopStrategiesMenu().GetAwaiter().GetResult();
-                                break;
-                        }
-                    }
-                    break;
-            }
+            exit = HandleKeyInput(keyInfo.Key);
         }
     }
 
@@ -112,5 +82,53 @@ public class MainMenu : IDisposable
         }
 
         Console.ResetColor();
+    }
+
+    private bool HandleKeyInput(ConsoleKey key)
+    {
+        switch (key)
+        {
+            case ConsoleKey.UpArrow:
+            case ConsoleKey.DownArrow:
+                ConsoleHelper.HandleArrowKey(key, MenuOptions, ref selectedOption);
+                break;
+
+            case ConsoleKey.Enter:
+                return HandleEnterKey();
+        }
+
+        return false;
+    }
+
+    private bool HandleEnterKey()
+    {
+        if (selectedOption == MenuOptions.Count - 1)
+        {
+            // Exit the program
+            return true;
+        }
+        else
+        {
+            HandleStrategyMenus();
+        }
+
+        return false;
+    }
+
+    private void HandleStrategyMenus()
+    {
+        switch (selectedOption)
+        {
+            case 0:
+                strategiesManager.ManageStrategies();
+                break;
+            case 1:
+                strategiesExecutor.ExecuteSelectedStrategies();
+                break;
+            case 2:
+                // Show menu of running strategies to be able to stop chosen ones
+                strategiesExecutor.StopStrategiesMenu().GetAwaiter().GetResult();
+                break;
+        }
     }
 }
