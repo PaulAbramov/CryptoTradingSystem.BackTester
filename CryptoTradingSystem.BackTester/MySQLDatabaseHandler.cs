@@ -1,13 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using CryptoTradingSystem.BackTester.Interfaces;
+﻿using CryptoTradingSystem.BackTester.Interfaces;
 using CryptoTradingSystem.General.Data;
 using CryptoTradingSystem.General.Database;
 using CryptoTradingSystem.General.Database.Models;
 using CryptoTradingSystem.General.Strategy;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace CryptoTradingSystem.BackTester;
 
@@ -19,7 +19,7 @@ public class MySQLDatabaseHandler : IDatabaseHandlerBackTester
     {
         this.connectionString = connectionString;
     }
-    
+
     /// <summary>
     /// return indicators for timeframe
     /// </summary>
@@ -30,18 +30,18 @@ public class MySQLDatabaseHandler : IDatabaseHandlerBackTester
     /// <param name="lastCloseTime"></param>
     /// <returns></returns>
     public T? GetIndicator<T>(
-        Enums.Assets asset, 
-        Enums.TimeFrames timeFrame, 
+        Enums.Assets asset,
+        Enums.TimeFrames timeFrame,
         Type indicator,
-        DateTime firstCloseTime = new DateTime(), 
-        DateTime lastCloseTime = new DateTime()) 
+        DateTime firstCloseTime = new DateTime(),
+        DateTime lastCloseTime = new DateTime())
         where T : Indicator
     {
         if (lastCloseTime == DateTime.MinValue)
         {
             lastCloseTime = DateTime.MaxValue;
         }
-        
+
         try
         {
             using var contextDb = new CryptoTradingSystemContext(connectionString);
@@ -69,9 +69,9 @@ public class MySQLDatabaseHandler : IDatabaseHandlerBackTester
         {
             Log.Error(
                 e,
-                "{Asset} | {TimeFrame} | {Indicator} | {FirstClose} | {LastClose} | could not get candles from Database", 
-                asset.GetStringValue(), 
-                timeFrame.GetStringValue(), 
+                "{Asset} | {TimeFrame} | {Indicator} | {FirstClose} | {LastClose} | could not get candles from Database",
+                asset.GetStringValue(),
+                timeFrame.GetStringValue(),
                 indicator.Name,
                 firstCloseTime,
                 lastCloseTime);
@@ -80,7 +80,7 @@ public class MySQLDatabaseHandler : IDatabaseHandlerBackTester
 
         return null;
     }
-    
+
     /// <summary>
     /// iterates over all assets and gets the data from the database
     /// </summary>
@@ -90,21 +90,21 @@ public class MySQLDatabaseHandler : IDatabaseHandlerBackTester
     public static List<Indicator> GetDataFromDatabase(StrategyParameter strategyParameter, string connectionString)
     {
         var results = new List<Indicator>();
-        foreach(var asset in strategyParameter.Assets)
+        foreach (var asset in strategyParameter.Assets)
         {
             try
             {
                 var databaseHandler = new MySQLDatabaseHandler(connectionString);
-    
+
                 //make the call to "GetIndicators" Generic
                 var databaseHandlerType = databaseHandler.GetType();
-    
+
                 var method = databaseHandlerType.GetMethod("GetIndicator");
                 var genericMethod = method?.MakeGenericMethod(asset.Item3);
-                
+
                 //pass the parameters to the method
-                var result = (Indicator?) genericMethod?.Invoke(
-                    databaseHandler, 
+                var result = (Indicator?)genericMethod?.Invoke(
+                    databaseHandler,
                     new object?[]
                     {
                         asset.Item2,
@@ -113,7 +113,7 @@ public class MySQLDatabaseHandler : IDatabaseHandlerBackTester
                         strategyParameter.TimeFrameStart,
                         strategyParameter.TimeFrameEnd
                     });
-    
+
                 if (result is not null)
                 {
                     results.Add(result);
@@ -128,11 +128,11 @@ public class MySQLDatabaseHandler : IDatabaseHandlerBackTester
                     Enums.TimeFrames.M5.GetStringValue(),
                     asset.Item3.Name,
                     DateTime.Now.AddMonths(-1));
-    
+
                 throw;
             }
         }
-    
+
         return results;
     }
 }

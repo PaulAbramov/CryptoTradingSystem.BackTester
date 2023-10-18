@@ -19,14 +19,14 @@ namespace CryptoTradingSystem.BackTester
 #if DEBUG
                 .WriteTo.Console(outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
 #endif
-                .WriteTo.File(loggingfilePath ?? "logs/Backtester.txt", 
+                .WriteTo.File(loggingfilePath ?? "logs/Backtester.txt",
                     rollingInterval: RollingInterval.Day,
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
 
             var menu = new MainMenu(config);
             menu.StartMainMenu();
-            
+
             menu.Dispose();
         }
     }

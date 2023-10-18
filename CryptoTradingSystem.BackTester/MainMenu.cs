@@ -1,8 +1,8 @@
+using CryptoTradingSystem.General.Helper;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using CryptoTradingSystem.General.Helper;
-using Microsoft.Extensions.Configuration;
 
 namespace CryptoTradingSystem.BackTester;
 
@@ -13,7 +13,7 @@ public class MainMenu : IDisposable
 
     private readonly StrategiesManager strategiesManager;
     private readonly StrategiesExecutor strategiesExecutor;
-    
+
     private static readonly List<string> MenuOptions = new()
     {
         "Handle strategies",
@@ -28,26 +28,26 @@ public class MainMenu : IDisposable
         strategiesManager = new StrategiesManager(config, strategiesExecutor);
         strategiesExecutor.StrategyUpdateEvent += CheckStrategiesUpdates;
     }
-    
+
     public void Dispose()
     {
         strategiesExecutor.StrategyUpdateEvent -= CheckStrategiesUpdates;
         strategiesManager.Dispose();
         strategiesExecutor.Dispose();
     }
-    
+
     private void CheckStrategiesUpdates(object sender, EventArgs? e)
     {
         runningStrategiesTexts = new List<string>();
-            
-        foreach (var statsString in from strategy in strategiesExecutor.RunningStrategies 
-                 let statsString = $"{strategy.Name.Replace(".dll", string.Empty)} running... {strategy.TradesAmount} Trades made, currently at time: {strategy.CurrentCloseDateTime}" 
-                 select statsString + (strategy.RunningTrade ? " | Running trade" : string.Empty))
+
+        foreach (var statsString in from strategy in strategiesExecutor.RunningStrategies
+                                    let statsString = $"{strategy.Name.Replace(".dll", string.Empty)} running... {strategy.StrategyAnalytics.TradesAmount} Trades made, currently at time: {strategy.CurrentCloseDateTime}"
+                                    select statsString + (strategy.RunningTrade ? " | Running trade" : string.Empty))
         {
             runningStrategiesTexts.Add(statsString);
         }
     }
-    
+
     public void StartMainMenu()
     {
         var exit = false;
@@ -83,7 +83,7 @@ public class MainMenu : IDisposable
                                 break;
                             case 2:
                                 // Show menu of running strategies to be able to stop chosen ones
-                                strategiesExecutor.StopStrategies();
+                                strategiesExecutor.StopStrategiesMenu().GetAwaiter().GetResult();
                                 break;
                         }
                     }

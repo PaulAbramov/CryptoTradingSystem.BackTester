@@ -1,11 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using CryptoTradingSystem.General.Data;
 using CryptoTradingSystem.General.Helper;
 using Microsoft.Extensions.Configuration;
 using Serilog;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace CryptoTradingSystem.BackTester;
 
@@ -13,7 +13,7 @@ public class StrategiesManager : IDisposable
 {
     private int selectedOption;
     private List<StrategyOption>? strategies = new();
-    
+
     private readonly List<string> runningStrategies = new();
     private readonly StrategiesExecutor strategiesExecutor;
     private readonly IConfiguration config;
@@ -48,7 +48,7 @@ public class StrategiesManager : IDisposable
         while (!exit)
         {
             DrawStrategiesMenu();
-            
+
             var keyInfo = Console.ReadKey(true);
 
             switch (keyInfo.Key)
@@ -85,7 +85,7 @@ public class StrategiesManager : IDisposable
             }
         }
     }
-    
+
     private void DrawStrategiesMenu()
     {
         CheckStrategiesUpdates(null, null);
@@ -112,20 +112,20 @@ public class StrategiesManager : IDisposable
                 EStrategyActivityState.ToDelete => ConsoleColor.Red,
                 _ => originalForegroundColor
             };
-            
+
             Console.WriteLine($"{strategies[i].Name}");
             Console.ForegroundColor = originalForegroundColor;
         }
     }
-    
+
     private void LoadStrategyDlls()
     {
         strategies?.Clear();
         strategies = SettingsHelper.GetStrategyOptions(config);
-        
+
         Log.Debug("Found following Strategies in appsettings: {strategies}",
                 string.Join(", ", strategies.Select(x => x.Name)));
-        
+
         strategies?.AddRange(defaultMenuOptions);
     }
 
@@ -145,9 +145,9 @@ public class StrategiesManager : IDisposable
         strategiesInConfig.Add(new StrategyOption { Name = filename, Path = path, ActivityState = EStrategyActivityState.None });
 
         SettingsHelper.UpdateStrategyOptions(config, strategiesInConfig);
-        
-        Log.Debug("Added Strategy: {Strategy} | {PathToStrategy}", 
-            filename, 
+
+        Log.Debug("Added Strategy: {Strategy} | {PathToStrategy}",
+            filename,
             path);
     }
 
@@ -158,7 +158,7 @@ public class StrategiesManager : IDisposable
         {
             return;
         }
-        
+
         strategiesInConfig.RemoveAll(x => x.ActivityState == EStrategyActivityState.ToDelete);
         SettingsHelper.UpdateStrategyOptions(config, strategiesInConfig);
     }
