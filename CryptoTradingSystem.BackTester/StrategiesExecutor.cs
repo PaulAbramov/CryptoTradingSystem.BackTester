@@ -20,13 +20,17 @@ public class StrategiesExecutor : IDisposable
 
     private int selectedOption;
 
-    private readonly IConfiguration config;
+    private readonly IConfiguration? config;
     private readonly SortedDictionary<Thread, CancellationTokenSource?> threads = new();
 
     public readonly List<RunningStrategy> RunningStrategies = new();
 
     public delegate void StrategyUpdateEventHandler(object sender, EventArgs? e);
     public event StrategyUpdateEventHandler? StrategyUpdateEvent;
+
+    public StrategiesExecutor()
+    {
+    }
 
     public StrategiesExecutor(IConfiguration config)
     {
@@ -50,14 +54,19 @@ public class StrategiesExecutor : IDisposable
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     public void ExecuteSelectedStrategies()
     {
-        var connectionString = config.GetValue<string>(SettingsHelper.ConnectionString);
+        if (config is null)
+        {
+            return;
+        }
+
+        var connectionString = config?.GetValue<string>(SettingsHelper.ConnectionString);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             Log.Error("No ConnectionString found in appsettings.json, please check the file");
             return;
         }
 
-        var enabledStrategies = SettingsHelper.GetEnabledStrategyOptions(config);
+        var enabledStrategies = SettingsHelper.GetEnabledStrategyOptions(config!);
         if (enabledStrategies.Count == 0)
         {
             return;
@@ -404,10 +413,14 @@ public class StrategiesExecutor : IDisposable
     /// <param name="strategy"></param>
     /// <param name="candleClose"></param>
     /// <param name="tradeType"></param>
-    private static void SetStatisticsClosedTrades(RunningStrategy? strategy, decimal? candleClose, Enums.TradeType tradeType)
+    internal static void SetStatisticsClosedTrades(
+        RunningStrategy? strategy,
+        decimal? candleClose,
+        Enums.TradeType tradeType)
     {
         if (candleClose == null
-            || strategy == null)
+            || strategy == null
+            || !strategy.RunningTrade)
         {
             return;
         }
@@ -422,11 +435,42 @@ public class StrategiesExecutor : IDisposable
         {
             profitLoss = candleClose - strategy.TradeOpenPrice;
         }
-
-        _ = profitLoss > 0 ? strategy.StrategyAnalytics.AmountOfWonTrades++ : strategy.StrategyAnalytics.AmountOfLostTrades++;
-        strategy.StrategyAnalytics.Profit += profitLoss.Value;
+        else
+        {
+            return;
+        }
 
         strategy.StrategyAnalytics.TradesAmount++;
+
+        _ = profitLoss > 0 ? strategy.StrategyAnalytics.AmountOfWonTrades++ : strategy.StrategyAnalytics.AmountOfLostTrades++;
+        strategy.StrategyAnalytics.ProfitLoss += profitLoss.Value;
+
+        strategy.StrategyAnalytics.ReturnOnInvestment = strategy.StrategyAnalytics.ProfitLoss / strategy.InitialInvestment * 100;
+
+        strategy.StrategyAnalytics.WonTradesPercentage = strategy.StrategyAnalytics.AmountOfWonTrades / strategy.StrategyAnalytics.TradesAmount * 100;
+        strategy.StrategyAnalytics.LostTradesPercentage = 100m - strategy.StrategyAnalytics.WonTradesPercentage;
+
+        // TODO calculate RiskReward Ratio
+        // !ratio between potential profit and potential loss
+
+        // TODO calculate Sharpe Ratio
+        // !risk-adjusted return - considers return and volatility of strategy
+        // !(Return of Portfolio - Risk-Free Rate) / Portfolio Standard Deviation
+        // !(ROI - 2%) / BTC standard deviation
+        //  strategy.StrategyAnalytics.SharpeRatio = (strategy.StrategyAnalytics.ReturnOnInvestment - 2m) / ;
+
+        // TODO calculate Max Drawdown in %
+
+        // TODO calculate Average Trade Duration
+        // !shows holding time and strategy efficiency
+
+        // TODO calculate Trade Frequency 30D?
+
+        // TODO calculate Slippage
+        // !analyze difference between expected price and execute price of orders
+
+        // TODO calculate Volatility
+
         strategy.RunningTrade = !strategy.RunningTrade;
     }
 }

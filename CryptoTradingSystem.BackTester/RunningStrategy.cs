@@ -8,5 +8,6 @@ public class RunningStrategy
     public DateTime CurrentCloseDateTime { get; set; }
     public decimal TradeOpenPrice { get; set; }
     public bool RunningTrade { get; set; }
+    public decimal InitialInvestment { get; set; }
     public StrategyAnalytics StrategyAnalytics { get; set; } = new();
 }
