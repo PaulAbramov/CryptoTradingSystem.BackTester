@@ -41,7 +41,7 @@ public class MainMenu : IDisposable
         runningStrategiesTexts = new List<string>();
 
         foreach (var statsString in from strategy in strategiesExecutor.RunningStrategies
-                                    let statsString = $"{strategy.Name.Replace(".dll", string.Empty)} running... {strategy.StrategyAnalytics.TradesAmount} Trades made, currently at time: {strategy.CurrentCloseDateTime}"
+                                    let statsString = $"{strategy.Name.Replace(".dll", string.Empty)} running... {strategy.TradesAmount} Trades made, currently at time: {strategy.CurrentCloseDateTime}"
                                     select statsString + (strategy.RunningTrade ? " | Running trade" : string.Empty))
         {
             runningStrategiesTexts.Add(statsString);

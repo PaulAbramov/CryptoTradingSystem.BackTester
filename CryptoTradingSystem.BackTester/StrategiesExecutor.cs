@@ -171,7 +171,7 @@ public class StrategiesExecutor : IDisposable
             return;
         }
 
-        if (executionParameter?.Item1?.Assets.Count == 0)
+        if (executionParameter.Item1?.Assets.Count == 0)
         {
             Log.Error("No Assets requested in Strategyparameter");
             return;
@@ -244,12 +244,13 @@ public class StrategiesExecutor : IDisposable
         }
 
         var newCancellationTokenSource = new CancellationTokenSource();
+        // ReSharper disable once UseObjectOrCollectionInitializer
         var newStrategyThread = new Thread(() =>
         {
             ExecuteStrategy(connectionString,
-                (StrategyParameter)executionParameter?.Item1!,
-                executionParameter?.Item2,
-                executionParameter?.Item3,
+                (StrategyParameter)executionParameter.Item1!,
+                executionParameter.Item2,
+                executionParameter.Item3,
                 newCancellationTokenSource.Token);
         });
 
@@ -274,6 +275,7 @@ public class StrategiesExecutor : IDisposable
         CancellationToken cancellationToken)
     {
         var tradestatus = Enums.TradeStatus.Closed;
+        var strategyState = Enums.StrategyState.None;
         while (true)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -282,14 +284,14 @@ public class StrategiesExecutor : IDisposable
             }
 
             var results = MySQLDatabaseHandler.GetDataFromDatabase(strategyParameter, connectionString);
-            if (results is null || results.Count == 0)
+            if (results.Count == 0)
             {
                 continue;
             }
 
             try
             {
-                HandleData(results!, strategyParameter, obj, executeStrategyMethod, tradestatus);
+                HandleData(results!, strategyParameter, obj, executeStrategyMethod, tradestatus, strategyState);
             }
             catch (Exception e)
             {
@@ -300,12 +302,14 @@ public class StrategiesExecutor : IDisposable
     }
 
     private void HandleData(
-        List<Indicator?> results,
+        IReadOnlyList<Indicator?> results,
         StrategyParameter strategyParameter,
         object? obj,
         MethodInfo? executeStrategyMethod,
-        Enums.TradeStatus tradestatus)
+        Enums.TradeStatus tradestatus,
+        Enums.StrategyState strategyState)
     {
+        // TODO check if tradestatus and strategystate are persisted
         var strategy = RunningStrategies.FirstOrDefault(x => x.Name == Thread.CurrentThread.Name);
         if (strategy == null)
         {
@@ -318,13 +322,15 @@ public class StrategiesExecutor : IDisposable
         tradestatus = returnParameter.TradeStatus;
         switch (returnParameter.TradeStatus)
         {
+            //TODO is state pattern in here possible?
             case Enums.TradeStatus.Open:
                 HandleOpenTrade(
                     strategy,
                     returnParameter.TradeType,
                     strategyParameter.AssetToBuy,
                     results[0]!.Asset?.CandleClose ?? 0,
-                    results[0]!.Asset!.CloseTime);
+                    results[0]!.Asset!.CloseTime,
+                    strategyState);
                 break;
             case Enums.TradeStatus.Closed:
                 HandleCloseTrade(
@@ -332,7 +338,8 @@ public class StrategiesExecutor : IDisposable
                     returnParameter.TradeType,
                     strategyParameter.AssetToBuy,
                     results[0]!.Asset?.CandleClose ?? 0,
-                    results[0]!.Asset!.CloseTime);
+                    results[0]!.Asset!.CloseTime,
+                    strategyState);
                 break;
         }
 
@@ -344,8 +351,32 @@ public class StrategiesExecutor : IDisposable
         Enums.TradeType tradeType,
         Enums.Assets assetToBuy,
         decimal candleClose,
-        DateTime closeTime)
+        DateTime closeTime,
+        Enums.StrategyState strategyState)
     {
+        //TODO backtesting
+        //      open "papertrade"
+        
+        //TODO validationphase
+        //      open "papertrade" - "forwardtrade"
+        
+        //TODO live trading
+        //      open trade via API
+        switch(strategyState)
+        {
+            case Enums.StrategyState.Backtesting:
+                //if(results.)
+                //strategy.backtest
+                break;
+            case Enums.StrategyState.Validating:
+                break;
+            case Enums.StrategyState.LiveTrading:
+                break;
+            case Enums.StrategyState.None:
+            default:
+                throw new ArgumentOutOfRangeException(nameof(strategyState),"state is none or not defined");
+        }
+
         switch (tradeType)
         {
             case Enums.TradeType.None:
@@ -369,7 +400,6 @@ public class StrategiesExecutor : IDisposable
         if (strategy != null)
         {
             strategy.RunningTrade = !strategy.RunningTrade;
-            strategy.TradeOpenPrice = candleClose;
         }
 
         StrategyUpdateEvent?.Invoke(this, null);
@@ -380,8 +410,39 @@ public class StrategiesExecutor : IDisposable
         Enums.TradeType tradeType,
         Enums.Assets assetToBuy,
         decimal candleClose,
-        DateTime closeTime)
+        DateTime closeTime,
+        Enums.StrategyState strategyState)
     {
+        //TODO backtesting
+        //      close "papertrade"
+        //      check if candle is the most recent one, by getting timeframe and check against now
+        //          if so, switch into validating
+        
+        //TODO validationphase
+        //      close "papertrade"
+        //      check if strategy is still in approvementDuration
+        //          if not, see if statistics minimals are reached
+        //              if so, switch into live trading
+        
+        //TODO live trading
+        //      close trade via API
+        //      see if statistics minimals are still reached
+        //          if not, go back and restart validationphase
+        switch(strategyState)
+        {
+            case Enums.StrategyState.Backtesting:
+                //if(results.)
+                //strategy.backtest
+                break;
+            case Enums.StrategyState.Validating:
+                break;
+            case Enums.StrategyState.LiveTrading:
+                break;
+            case Enums.StrategyState.None:
+            default:
+                throw new ArgumentOutOfRangeException(nameof(strategyState),"state is none or not defined");
+        }
+        
         switch (tradeType)
         {
             case Enums.TradeType.None:
@@ -402,75 +463,9 @@ public class StrategiesExecutor : IDisposable
             default:
                 throw new ArgumentOutOfRangeException();
         }
-        SetStatisticsClosedTrades(strategy, candleClose, tradeType);
+        strategy.RunningTrade = !strategy.RunningTrade;
+        strategy.TradesAmount++;
 
         StrategyUpdateEvent?.Invoke(this, null);
-    }
-
-    /// <summary>
-    /// Set stastics after closing the trade
-    /// </summary>
-    /// <param name="strategy"></param>
-    /// <param name="candleClose"></param>
-    /// <param name="tradeType"></param>
-    internal static void SetStatisticsClosedTrades(
-        RunningStrategy? strategy,
-        decimal? candleClose,
-        Enums.TradeType tradeType)
-    {
-        if (candleClose == null
-            || strategy == null
-            || !strategy.RunningTrade)
-        {
-            return;
-        }
-
-        decimal? profitLoss = 0;
-
-        if (tradeType == Enums.TradeType.Buy)
-        {
-            profitLoss = strategy.TradeOpenPrice - candleClose;
-        }
-        else if (tradeType == Enums.TradeType.Sell)
-        {
-            profitLoss = candleClose - strategy.TradeOpenPrice;
-        }
-        else
-        {
-            return;
-        }
-
-        strategy.StrategyAnalytics.TradesAmount++;
-
-        _ = profitLoss > 0 ? strategy.StrategyAnalytics.AmountOfWonTrades++ : strategy.StrategyAnalytics.AmountOfLostTrades++;
-        strategy.StrategyAnalytics.ProfitLoss += profitLoss.Value;
-
-        strategy.StrategyAnalytics.ReturnOnInvestment = strategy.StrategyAnalytics.ProfitLoss / strategy.InitialInvestment * 100;
-
-        strategy.StrategyAnalytics.WonTradesPercentage = strategy.StrategyAnalytics.AmountOfWonTrades / strategy.StrategyAnalytics.TradesAmount * 100;
-        strategy.StrategyAnalytics.LostTradesPercentage = 100m - strategy.StrategyAnalytics.WonTradesPercentage;
-
-        // TODO calculate RiskReward Ratio
-        // !ratio between potential profit and potential loss
-
-        // TODO calculate Sharpe Ratio
-        // !risk-adjusted return - considers return and volatility of strategy
-        // !(Return of Portfolio - Risk-Free Rate) / Portfolio Standard Deviation
-        // !(ROI - 2%) / BTC standard deviation
-        //  strategy.StrategyAnalytics.SharpeRatio = (strategy.StrategyAnalytics.ReturnOnInvestment - 2m) / ;
-
-        // TODO calculate Max Drawdown in %
-
-        // TODO calculate Average Trade Duration
-        // !shows holding time and strategy efficiency
-
-        // TODO calculate Trade Frequency 30D?
-
-        // TODO calculate Slippage
-        // !analyze difference between expected price and execute price of orders
-
-        // TODO calculate Volatility
-
-        strategy.RunningTrade = !strategy.RunningTrade;
     }
 }
