@@ -79,8 +79,8 @@ public class StrategyHandlerTestsOpenTrades
 					Is.EqualTo(100),
 					"OpenTrades[Enums.TradeType.Buy]");
 				Assert.That(
-					strategy.CurrentState,
-					Is.EqualTo(strategy.CurrentState as BacktestingState),
+					strategy.GetState(),
+					Is.EqualTo(strategy.GetState() as BacktestingState),
 					"CurrentState");
 			});
 	}
@@ -110,8 +110,8 @@ public class StrategyHandlerTestsOpenTrades
 					Is.EqualTo(100),
 					"OpenTrades[Enums.TradeType.Buy]");
 				Assert.That(
-					strategy.CurrentState,
-					Is.EqualTo(strategy.CurrentState as ValidationState),
+					strategy.GetState(),
+					Is.EqualTo(strategy.GetState() as ValidationState),
 					"CurrentState");
 			});
 	}
@@ -141,8 +141,8 @@ public class StrategyHandlerTestsOpenTrades
 					Is.EqualTo(100),
 					"OpenTrades[Enums.TradeType.Buy]");
 				Assert.That(
-					strategy.CurrentState,
-					Is.EqualTo(strategy.CurrentState as LiveTradingState),
+					strategy.GetState(),
+					Is.EqualTo(strategy.GetState() as LiveTradingState),
 					"CurrentState");
 			});
 	}
@@ -249,8 +249,8 @@ public class StrategyHandlerTestsCloseTrades
 					Has.Count.EqualTo(0),
 					"OpenTrades.Count");
 				Assert.That(
-					strategy.CurrentState,
-					Is.EqualTo(strategy.CurrentState as BacktestingState),
+					strategy.GetState(),
+					Is.EqualTo(strategy.GetState() as BacktestingState),
 					"CurrentState");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
@@ -297,8 +297,8 @@ public class StrategyHandlerTestsCloseTrades
 					Has.Count.EqualTo(0),
 					"OpenTrades.Count");
 				Assert.That(
-					strategy.CurrentState,
-					Is.EqualTo(strategy.CurrentState as ValidationState),
+					strategy.GetState(),
+					Is.EqualTo(strategy.GetState() as ValidationState),
 					"CurrentState");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
@@ -346,8 +346,8 @@ public class StrategyHandlerTestsCloseTrades
 					Has.Count.EqualTo(0),
 					"OpenTrades.Count");
 				Assert.That(
-					strategy.CurrentState,
-					Is.EqualTo(strategy.CurrentState as ValidationState),
+					strategy.GetState(),
+					Is.EqualTo(strategy.GetState() as ValidationState),
 					"CurrentState");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
@@ -395,8 +395,8 @@ public class StrategyHandlerTestsCloseTrades
 					Has.Count.EqualTo(0),
 					"OpenTrades.Count");
 				Assert.That(
-					strategy.CurrentState,
-					Is.EqualTo(strategy.CurrentState as LiveTradingState),
+					strategy.GetState(),
+					Is.EqualTo(strategy.GetState() as LiveTradingState),
 					"CurrentState");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
@@ -444,8 +444,8 @@ public class StrategyHandlerTestsCloseTrades
 					Has.Count.EqualTo(0),
 					"OpenTrades.Count");
 				Assert.That(
-					strategy.CurrentState,
-					Is.EqualTo(strategy.CurrentState as LiveTradingState),
+					strategy.GetState(),
+					Is.EqualTo(strategy.GetState() as LiveTradingState),
 					"CurrentState");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
@@ -493,8 +493,8 @@ public class StrategyHandlerTestsCloseTrades
 					Has.Count.EqualTo(0),
 					"OpenTrades.Count");
 				Assert.That(
-					strategy.CurrentState,
-					Is.EqualTo(strategy.CurrentState as ValidationState),
+					strategy.GetState(),
+					Is.EqualTo(strategy.GetState() as ValidationState),
 					"CurrentState");
 				Assert.That(
 					strategy.Statistics.TradesAmount,

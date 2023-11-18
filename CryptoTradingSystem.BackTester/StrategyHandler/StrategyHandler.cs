@@ -20,7 +20,7 @@ public class StrategyHandler
 	public StrategyStatistics ApprovementStatistics { get; private set; } = new();
 	public Dictionary<Enums.TradeType, decimal> OpenTrades { get; }= new();
 	
-	internal IStrategyState CurrentState { get; private set; } = new BacktestingState();
+	private IStrategyState CurrentState { get; set; } = new BacktestingState();
 
 	private Asset? entryCandle;
 
@@ -32,6 +32,8 @@ public class StrategyHandler
 		TradesAmount = 0;
 		Statistics.InitialInvestment = initialInvestment;
 	}
+	
+	internal IStrategyState GetState() => CurrentState;
 
 	public void OpenTrade(Enums.TradeType tradeType, Asset openCandle)
 	{
