@@ -19,7 +19,7 @@ public class StrategiesExecutor : IDisposable
 	public delegate void StrategyUpdateEventHandler(object sender, EventArgs? e);
 	public event StrategyUpdateEventHandler? StrategyUpdateEvent;
 
-	public readonly List<RunningStrategy> RunningStrategies = new();
+	public readonly List<StrategyHandler.StrategyHandler> StrategyHandlers = new();
 
 	private const string exitString = "Exit";
 
@@ -68,7 +68,7 @@ public class StrategiesExecutor : IDisposable
 		}
 
 		foreach (var strategy in enabledStrategies.Where(
-			         strategy => RunningStrategies.All(x => x.Name != strategy.Name)))
+			         strategy => StrategyHandlers.All(x => x.Name != strategy.Name)))
 		{
 			SetupStrategyExecution(strategy, connectionString);
 		}
@@ -143,7 +143,7 @@ public class StrategiesExecutor : IDisposable
 	/// <returns></returns>
 	private async Task StopStrategy(Thread savedThread)
 	{
-		RunningStrategies.RemoveAll(x => x.Name == savedThread.Name);
+		StrategyHandlers.RemoveAll(x => x.Name == savedThread.Name);
 
 		threads.ElementAt(selectedOption).Value?.Cancel();
 
@@ -172,7 +172,7 @@ public class StrategiesExecutor : IDisposable
 			return;
 		}
 
-		StartStrategy(strategy.Name, connectionString, executionParameter!);
+		StartStrategy(strategy.Name, connectionString, executionParameter);
 	}
 
 	/// <summary>
@@ -258,7 +258,8 @@ public class StrategiesExecutor : IDisposable
 
 		threads.Add(newStrategyThread, newCancellationTokenSource);
 
-		RunningStrategies.Add(new() { Name = strategyName });
+		// TODO pass initialInvestment to the StrategyHandler from strategyparameter
+		StrategyHandlers.Add(new(strategyName, 1000));
 
 		StrategyUpdateEvent?.Invoke(this, null);
 	}
@@ -271,7 +272,6 @@ public class StrategiesExecutor : IDisposable
 		CancellationToken cancellationToken)
 	{
 		var tradestatus = Enums.TradeStatus.Closed;
-		var strategyState = Enums.StrategyState.None;
 		while (true)
 		{
 			if (cancellationToken.IsCancellationRequested)
@@ -287,7 +287,7 @@ public class StrategiesExecutor : IDisposable
 
 			try
 			{
-				HandleData(results!, strategyParameter, obj, executeStrategyMethod, tradestatus, strategyState);
+				HandleData(results, strategyParameter, obj, executeStrategyMethod, tradestatus);
 			}
 			catch (Exception e)
 			{
@@ -302,11 +302,10 @@ public class StrategiesExecutor : IDisposable
 		StrategyParameter strategyParameter,
 		object? obj,
 		MethodInfo? executeStrategyMethod,
-		Enums.TradeStatus tradestatus,
-		Enums.StrategyState strategyState)
+		Enums.TradeStatus tradestatus)
 	{
 		// TODO check if tradestatus and strategystate are persisted
-		var strategy = RunningStrategies.FirstOrDefault(x => x.Name == Thread.CurrentThread.Name);
+		var strategy = StrategyHandlers.FirstOrDefault(x => x.Name == Thread.CurrentThread.Name);
 		if (strategy == null)
 		{
 			return;
@@ -325,24 +324,17 @@ public class StrategiesExecutor : IDisposable
 		tradestatus = returnParameter.TradeStatus;
 		switch (returnParameter.TradeStatus)
 		{
-			//TODO is state pattern in here possible?
 			case Enums.TradeStatus.Open:
 				HandleOpenTrade(
 					strategy,
 					returnParameter.TradeType,
-					strategyParameter.AssetToBuy,
-					results[0]!.Asset?.CandleClose ?? 0,
-					results[0]!.Asset!.CloseTime,
-					strategyState);
+					results[0]!.Asset!);
 				break;
 			case Enums.TradeStatus.Closed:
 				HandleCloseTrade(
 					strategy,
 					returnParameter.TradeType,
-					strategyParameter.AssetToBuy,
-					results[0]!.Asset?.CandleClose ?? 0,
-					results[0]!.Asset!.CloseTime,
-					strategyState);
+					results[0]!.Asset!);
 				break;
 		}
 
@@ -350,126 +342,66 @@ public class StrategiesExecutor : IDisposable
 	}
 
 	private void HandleOpenTrade(
-		RunningStrategy strategy,
+		StrategyHandler.StrategyHandler strategy,
 		Enums.TradeType tradeType,
-		Enums.Assets assetToBuy,
-		decimal candleClose,
-		DateTime closeTime,
-		Enums.StrategyState strategyState)
+		Asset candle)
 	{
-		//TODO backtesting
-		//      open "papertrade"
+		strategy.OpenTrade(tradeType, candle);
 
-		//TODO validationphase
-		//      open "papertrade" - "forwardtrade"
+		// TODO need I to separate between Buy and Sell order?
+		// switch (tradeType)
+		// {
+		// 	case Enums.TradeType.None:
+		// 		break;
+		// 	case Enums.TradeType.Buy:
+		// 		Log.Warning(
+		// 			"Long {AssetName} at {CloseTime}| Price: {CandleClose}",
+		// 			assetToBuy,
+		// 			closeTime,
+		// 			candleClose);
+		// 		break;
+		// 	case Enums.TradeType.Sell:
+		// 		Log.Warning(
+		// 			"Short {AssetName} at {CloseTime} | Price: {CandleClose}",
+		// 			assetToBuy,
+		// 			closeTime,
+		// 			candleClose);
+		// 		break;
+		// 	default:
+		// 		throw new ArgumentOutOfRangeException();
+		// }
 
-		//TODO live trading
-		//      open trade via API
-		switch (strategyState)
-		{
-			case Enums.StrategyState.Backtesting:
-				//if(results.)
-				//strategy.backtest
-				break;
-			case Enums.StrategyState.Validating:
-				break;
-			case Enums.StrategyState.LiveTrading:
-				break;
-			case Enums.StrategyState.None:
-			default:
-				throw new ArgumentOutOfRangeException(nameof(strategyState), "state is none or not defined");
-		}
-
-		switch (tradeType)
-		{
-			case Enums.TradeType.None:
-				break;
-			case Enums.TradeType.Buy:
-				Log.Warning(
-					"Long {AssetName} at {CloseTime}| Price: {CandleClose}",
-					assetToBuy,
-					closeTime,
-					candleClose);
-				break;
-			case Enums.TradeType.Sell:
-				Log.Warning(
-					"Short {AssetName} at {CloseTime} | Price: {CandleClose}",
-					assetToBuy,
-					closeTime,
-					candleClose);
-				break;
-			default:
-				throw new ArgumentOutOfRangeException();
-		}
-
-		if (strategy != null)
-		{
-			strategy.RunningTrade = !strategy.RunningTrade;
-		}
+		strategy.RunningTrade = !strategy.RunningTrade;
 
 		StrategyUpdateEvent?.Invoke(this, null);
 	}
 
 	private void HandleCloseTrade(
-		RunningStrategy strategy,
+		StrategyHandler.StrategyHandler strategy,
 		Enums.TradeType tradeType,
-		Enums.Assets assetToBuy,
-		decimal candleClose,
-		DateTime closeTime,
-		Enums.StrategyState strategyState)
+		Asset candle)
 	{
-		//TODO backtesting
-		//      close "papertrade"
-		//      check if candle is the most recent one, by getting timeframe and check against now
-		//          if so, switch into validating
+		strategy.CloseTrade(tradeType, candle);
 
-		//TODO validationphase
-		//      close "papertrade"
-		//      check if strategy is still in approvementDuration
-		//          if not, see if statistics minimals are reached
-		//              if so, switch into live trading
-
-		//TODO live trading
-		//      close trade via API
-		//      see if statistics minimals are still reached
-		//          if not, go back and restart validationphase
-		switch (strategyState)
-		{
-			case Enums.StrategyState.Backtesting:
-				//if(results.)
-				//strategy.backtest
-				break;
-			case Enums.StrategyState.Validating:
-				break;
-			case Enums.StrategyState.LiveTrading:
-				break;
-			case Enums.StrategyState.None:
-			default:
-				throw new ArgumentOutOfRangeException(nameof(strategyState), "state is none or not defined");
-		}
-
-		switch (tradeType)
-		{
-			case Enums.TradeType.None:
-				break;
-			case Enums.TradeType.Buy:
-				Log.Warning(
-					"Close Short for {AssetName} at {CloseTime}| Price: {CandleClose}",
-					assetToBuy,
-					closeTime,
-					candleClose);
-				break;
-			case Enums.TradeType.Sell:
-				Log.Warning(
-					"Close Long for {AssetName} at {CloseTime} | Price: {CandleClose}",
-					assetToBuy,
-					closeTime,
-					candleClose);
-
-				break;
-			default:
-				throw new ArgumentOutOfRangeException();
-		}
+		// TODO need I to separate between Buy and Sell order?
+		// switch (tradeType)
+		// {
+		// 	case Enums.TradeType.None:
+		// 		break;
+		// 	case Enums.TradeType.Buy:
+		// 		
+		// 		break;
+		// 	case Enums.TradeType.Sell:
+		// 		Log.Warning(
+		// 			"Close Long for {AssetName} at {CloseTime} | Price: {CandleClose}",
+		// 			assetToBuy,
+		// 			candle.CloseTime,
+		// 			candle.CandleClose);
+		//
+		// 		break;
+		// 	default:
+		// 		throw new ArgumentOutOfRangeException();
+		// }
 
 		strategy.RunningTrade = !strategy.RunningTrade;
 		strategy.TradesAmount++;

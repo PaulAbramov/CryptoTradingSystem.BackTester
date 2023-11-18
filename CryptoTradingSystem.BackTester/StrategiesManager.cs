@@ -81,7 +81,7 @@ public class StrategiesManager : IDisposable
 	private void CheckStrategiesUpdates(object? sender, EventArgs? e)
 	{
 		runningStrategies.Clear();
-		runningStrategies.AddRange(strategiesExecutor.RunningStrategies.Select(x => x.Name));
+		runningStrategies.AddRange(strategiesExecutor.StrategyHandlers.Select(x => x.Name));
 	}
 
 	private bool HandleKeyInput(ConsoleKey key)
