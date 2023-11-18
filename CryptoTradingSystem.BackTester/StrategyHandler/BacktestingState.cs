@@ -5,14 +5,14 @@ using System;
 
 namespace CryptoTradingSystem.BackTester.StrategyHandler;
 
-public class BacktestingState : StrategyState
+public class BacktestingState : IStrategyState
 {
 	public BacktestingState()
 	{
 	}
 
 	// open "papertrade"
-	public override void OpenTrade(StrategyHandler handler, Asset entryCandle)
+	public void OpenTrade(StrategyHandler handler, Asset entryCandle)
 	{
 		Log.Warning(
 			"Open trade in backtesting state for {AssetName} at {CloseTime}| Price: {CandleClose}",
@@ -24,7 +24,7 @@ public class BacktestingState : StrategyState
 	// close "papertrade"
 	// check if candle is the most recent one, by getting timeframe and check against now
 	//	if so, switch into validating
-	public override void CloseTrade(StrategyHandler handler, Asset closeCandle)
+	public void CloseTrade(StrategyHandler handler, Asset closeCandle)
 	{
 		Log.Warning(
 			"Close trade in backtesting state for {AssetName} at {CloseTime}| Price: {CandleClose}",

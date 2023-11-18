@@ -6,7 +6,7 @@ using System.Net.Http;
 
 namespace CryptoTradingSystem.BackTester.StrategyHandler;
 
-public class LiveTradingState : StrategyState
+public class LiveTradingState : IStrategyState
 {
 	private HttpClient httpClient;
 
@@ -16,7 +16,7 @@ public class LiveTradingState : StrategyState
 	}
 
 	// open trade via API
-	public override void OpenTrade(StrategyHandler handler, Asset entryCandle)
+	public void OpenTrade(StrategyHandler handler, Asset entryCandle)
 	{
 		Log.Warning(
 			"Open trade in live-trading state for {AssetName} at {CloseTime}| Price: {CandleClose}",
@@ -28,7 +28,7 @@ public class LiveTradingState : StrategyState
 	// close trade via API
 	// see if statistics minimals are still reached
 	//	if not, go back and restart validationphase
-	public override void CloseTrade(StrategyHandler handler, Asset closeCandle)
+	public void CloseTrade(StrategyHandler handler, Asset closeCandle)
 	{
 		Log.Warning(
 			"Close trade in live-trading state for {AssetName} at {CloseTime}| Price: {CandleClose}",

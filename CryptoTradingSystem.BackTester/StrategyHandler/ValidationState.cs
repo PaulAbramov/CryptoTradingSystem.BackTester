@@ -5,7 +5,7 @@ using System;
 
 namespace CryptoTradingSystem.BackTester.StrategyHandler;
 
-public class ValidationState : StrategyState
+public class ValidationState : IStrategyState
 {
 	private readonly DateTime startOfApprovementDuration;
 	
@@ -15,7 +15,7 @@ public class ValidationState : StrategyState
 	}
 	
 	// open "papertrade" - "forwardtrade"
-	public override void OpenTrade(StrategyHandler handler, Asset entryCandle)
+	public void OpenTrade(StrategyHandler handler, Asset entryCandle)
 	{
 		Log.Warning(
 			"Open trade in validation state for {AssetName} at {CloseTime}| Price: {CandleClose}",
@@ -28,7 +28,7 @@ public class ValidationState : StrategyState
 	// check if strategy is still in approvementDuration
 	//	if not, see if statistics minimals are reached
 	//		if so, switch into live trading
-	public override void CloseTrade(StrategyHandler handler, Asset closeCandle)
+	public void CloseTrade(StrategyHandler handler, Asset closeCandle)
 	{
 		Log.Warning(
 			"Close trade in validation state for {AssetName} at {CloseTime}| Price: {CandleClose}",
@@ -42,6 +42,8 @@ public class ValidationState : StrategyState
 		}
 
 		// Get statistics here
+		
+		handler.Statistics
 		
 		var statisticsReached = true;
 		if (statisticsReached)

@@ -17,9 +17,11 @@ public class StrategyHandler
 	public int TradesAmount { get; set; }
 	public TimeSpan ApprovementDuration { get; set; }
 	public StrategyStatistics Statistics { get; private set; } = new();
-	public StrategyState CurrentState { get; private set; } = new BacktestingState();
+	public StrategyStatistics ApprovementStatistics { get; private set; } = new();
 	public Dictionary<Enums.TradeType, decimal> OpenTrades { get; }= new();
 	
+	internal IStrategyState CurrentState { get; private set; } = new BacktestingState();
+
 	private Asset? entryCandle;
 
 	public StrategyHandler(string name, decimal initialInvestment)
@@ -75,7 +77,7 @@ public class StrategyHandler
 		CurrentState.CloseTrade(this, closeCandle);
 	}
 
-	public void SetState(StrategyState state) => CurrentState = state;
+	internal void SetState(IStrategyState state) => CurrentState = state;
 	
 	/// <summary>
 	///   Set statistics after closing the trade
