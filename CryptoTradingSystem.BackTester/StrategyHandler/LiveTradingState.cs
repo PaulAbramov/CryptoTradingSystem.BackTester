@@ -6,17 +6,19 @@ using System.Net.Http;
 
 namespace CryptoTradingSystem.BackTester.StrategyHandler;
 
-public class LiveTradingState : IStrategyState
+internal class LiveTradingState : IStrategyState
 {
 	private HttpClient httpClient;
+	private readonly IChangeState stateChanger;
 
-	public LiveTradingState()
+	public LiveTradingState(IChangeState stateChanger)
 	{
+		this.stateChanger = stateChanger;
 		httpClient = new HttpClient();
 	}
 
 	// open trade via API
-	public void OpenTrade(StrategyHandler handler, Asset entryCandle)
+	public void OpenTrade(Asset entryCandle)
 	{
 		Log.Warning(
 			"Open trade in live-trading state for {AssetName} at {CloseTime}| Price: {CandleClose}",
@@ -42,11 +44,13 @@ public class LiveTradingState : IStrategyState
 		}
 
 		// Get statistics here
+		
+		//(stateChanger as StrategyHandler).Statistics 
 
 		var statisticsReached = true;
 		if (statisticsReached)
 		{
-			handler.SetState(new ValidationState());
+			stateChanger.ChangeState(new ValidationState(stateChanger));
 		}
 	}
 }

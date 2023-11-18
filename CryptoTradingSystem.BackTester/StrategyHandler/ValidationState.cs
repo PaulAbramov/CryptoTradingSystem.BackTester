@@ -5,17 +5,19 @@ using System;
 
 namespace CryptoTradingSystem.BackTester.StrategyHandler;
 
-public class ValidationState : IStrategyState
+internal class ValidationState : IStrategyState
 {
 	private readonly DateTime startOfApprovementDuration;
-	
-	public ValidationState()
+	private readonly IChangeState stateChanger;
+
+	public ValidationState(IChangeState stateChanger)
 	{
+		this.stateChanger = stateChanger;
 		startOfApprovementDuration = DateTime.Now;
 	}
 	
 	// open "papertrade" - "forwardtrade"
-	public void OpenTrade(StrategyHandler handler, Asset entryCandle)
+	public void OpenTrade(Asset entryCandle)
 	{
 		Log.Warning(
 			"Open trade in validation state for {AssetName} at {CloseTime}| Price: {CandleClose}",
@@ -43,12 +45,12 @@ public class ValidationState : IStrategyState
 
 		// Get statistics here
 		
-		handler.Statistics
+		//handler.Statistics
 		
 		var statisticsReached = true;
 		if (statisticsReached)
 		{
-			handler.SetState(new LiveTradingState());
+			stateChanger.ChangeState(new LiveTradingState(stateChanger));
 		}
 	}
 }

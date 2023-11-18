@@ -81,7 +81,7 @@ public class StrategyHandlerTestsOpenTrades
 				Assert.That(
 					strategy.GetState(),
 					Is.EqualTo(strategy.GetState() as BacktestingState),
-					"CurrentState");
+					"State");
 			});
 	}
 	
@@ -90,7 +90,7 @@ public class StrategyHandlerTestsOpenTrades
 	public void TestOpenTrade_ValidationState(Enums.TradeType tradeType, Asset openCandle)
 	{
 		// xArrange
-		strategy.SetState(new ValidationState());
+		strategy.ChangeState(new ValidationState(strategy));
 		
 		// Act
 		strategy.OpenTrade(tradeType, openCandle);
@@ -112,7 +112,7 @@ public class StrategyHandlerTestsOpenTrades
 				Assert.That(
 					strategy.GetState(),
 					Is.EqualTo(strategy.GetState() as ValidationState),
-					"CurrentState");
+					"State");
 			});
 	}
 	
@@ -121,7 +121,7 @@ public class StrategyHandlerTestsOpenTrades
 	public void TestOpenTrade_LiveTradingState(Enums.TradeType tradeType, Asset openCandle)
 	{
 		// xArrange
-		strategy.SetState(new LiveTradingState());
+		strategy.ChangeState(new LiveTradingState(strategy));
 		
 		// Act
 		strategy.OpenTrade(tradeType, openCandle);
@@ -143,7 +143,7 @@ public class StrategyHandlerTestsOpenTrades
 				Assert.That(
 					strategy.GetState(),
 					Is.EqualTo(strategy.GetState() as LiveTradingState),
-					"CurrentState");
+					"State");
 			});
 	}
 	
@@ -251,7 +251,7 @@ public class StrategyHandlerTestsCloseTrades
 				Assert.That(
 					strategy.GetState(),
 					Is.EqualTo(strategy.GetState() as BacktestingState),
-					"CurrentState");
+					"State");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
 					Is.EqualTo(1),
@@ -299,7 +299,7 @@ public class StrategyHandlerTestsCloseTrades
 				Assert.That(
 					strategy.GetState(),
 					Is.EqualTo(strategy.GetState() as ValidationState),
-					"CurrentState");
+					"State");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
 					Is.EqualTo(1),
@@ -329,7 +329,7 @@ public class StrategyHandlerTestsCloseTrades
 	public void TestCloseTrade_ValidationState(Enums.TradeType tradeTypeToClose, Asset closeCandle)
 	{
 		// xArrange
-		strategy.SetState(new ValidationState());
+		strategy.ChangeState(new ValidationState(strategy));
 		strategy.ApprovementDuration = TimeSpan.FromHours(1);
 		
 		// Act
@@ -348,7 +348,7 @@ public class StrategyHandlerTestsCloseTrades
 				Assert.That(
 					strategy.GetState(),
 					Is.EqualTo(strategy.GetState() as ValidationState),
-					"CurrentState");
+					"State");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
 					Is.EqualTo(1),
@@ -378,7 +378,7 @@ public class StrategyHandlerTestsCloseTrades
 	public void TestCloseTrade_ValidationState_Into_LiveTradingState(Enums.TradeType tradeTypeToClose, Asset closeCandle)
 	{
 		// xArrange
-		strategy.SetState(new ValidationState());
+		strategy.ChangeState(new ValidationState(strategy));
 		// No ApprovementDuration set, so it will calculate the statistics
 		
 		// Act
@@ -397,7 +397,7 @@ public class StrategyHandlerTestsCloseTrades
 				Assert.That(
 					strategy.GetState(),
 					Is.EqualTo(strategy.GetState() as LiveTradingState),
-					"CurrentState");
+					"State");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
 					Is.EqualTo(1),
@@ -427,7 +427,7 @@ public class StrategyHandlerTestsCloseTrades
 	public void TestCloseTrade_LiveTradingState(Enums.TradeType tradeTypeToClose, Asset closeCandle)
 	{
 		// xArrange
-		strategy.SetState(new LiveTradingState());
+		strategy.ChangeState(new LiveTradingState(strategy));
 		closeCandle.CloseTime = DateTime.Today.AddHours(22);
 		
 		// Act
@@ -446,7 +446,7 @@ public class StrategyHandlerTestsCloseTrades
 				Assert.That(
 					strategy.GetState(),
 					Is.EqualTo(strategy.GetState() as LiveTradingState),
-					"CurrentState");
+					"State");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
 					Is.EqualTo(1),
@@ -476,7 +476,7 @@ public class StrategyHandlerTestsCloseTrades
 	public void TestCloseTrade_LiveTradingState_Into_ValidationState(Enums.TradeType tradeTypeToClose, Asset closeCandle)
 	{
 		// xArrange
-		strategy.SetState(new LiveTradingState());
+		strategy.ChangeState(new LiveTradingState(strategy));
 		closeCandle.CloseTime = DateTime.Today.AddHours(24);
 		
 		// Act
@@ -495,7 +495,7 @@ public class StrategyHandlerTestsCloseTrades
 				Assert.That(
 					strategy.GetState(),
 					Is.EqualTo(strategy.GetState() as ValidationState),
-					"CurrentState");
+					"State");
 				Assert.That(
 					strategy.Statistics.TradesAmount,
 					Is.EqualTo(1),

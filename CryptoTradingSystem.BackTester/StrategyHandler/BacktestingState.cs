@@ -5,14 +5,17 @@ using System;
 
 namespace CryptoTradingSystem.BackTester.StrategyHandler;
 
-public class BacktestingState : IStrategyState
+internal class BacktestingState : IStrategyState
 {
-	public BacktestingState()
+	private readonly IChangeState stateChanger;
+
+	public BacktestingState(IChangeState stateChanger)
 	{
+		this.stateChanger = stateChanger;
 	}
 
 	// open "papertrade"
-	public void OpenTrade(StrategyHandler handler, Asset entryCandle)
+	public void OpenTrade(Asset entryCandle)
 	{
 		Log.Warning(
 			"Open trade in backtesting state for {AssetName} at {CloseTime}| Price: {CandleClose}",
@@ -35,7 +38,7 @@ public class BacktestingState : IStrategyState
 		// If we are not at the end of the day, we can't validate yet
 		if (closeCandle.CloseTime > DateTime.Today.AddHours(23))
 		{
-			handler.SetState(new ValidationState());
+			stateChanger.ChangeState(new ValidationState(stateChanger));
 		}
 	}
 }

@@ -2,8 +2,8 @@ using CryptoTradingSystem.General.Database.Models;
 
 namespace CryptoTradingSystem.BackTester.Interfaces;
 
-internal interface IStrategyState
+public interface IStrategyState
 {
-	void OpenTrade(StrategyHandler.StrategyHandler handler, Asset entryCandle);
+	void OpenTrade(Asset entryCandle);
 	void CloseTrade(StrategyHandler.StrategyHandler handler, Asset closeCandle);
 }

@@ -2,13 +2,14 @@ using CryptoTradingSystem.BackTester.Interfaces;
 using CryptoTradingSystem.General.Data;
 using CryptoTradingSystem.General.Database.Models;
 using CryptoTradingSystem.General.Strategy;
+using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace CryptoTradingSystem.BackTester.StrategyHandler;
 
-public class StrategyHandler
+public class StrategyHandler : IChangeState
 {
 	public string Name { get; init; }
 	//TODO CurrentCloseDateTime needed? I have candle closeTime
@@ -20,8 +21,7 @@ public class StrategyHandler
 	public StrategyStatistics ApprovementStatistics { get; private set; } = new();
 	public Dictionary<Enums.TradeType, decimal> OpenTrades { get; }= new();
 	
-	private IStrategyState CurrentState { get; set; } = new BacktestingState();
-
+	private IStrategyState state;
 	private Asset? entryCandle;
 
 	public StrategyHandler(string name, decimal initialInvestment)
@@ -31,10 +31,13 @@ public class StrategyHandler
 		RunningTrade = false;
 		TradesAmount = 0;
 		Statistics.InitialInvestment = initialInvestment;
+		state = new BacktestingState(this);
 	}
 	
-	internal IStrategyState GetState() => CurrentState;
-
+	public void ChangeState(IStrategyState state) => this.state = state;
+	
+	public IStrategyState GetState() => state;
+	
 	public void OpenTrade(Enums.TradeType tradeType, Asset openCandle)
 	{
 		if (tradeType == Enums.TradeType.None)
@@ -53,7 +56,7 @@ public class StrategyHandler
 		}
 			
 		entryCandle = openCandle;
-		CurrentState.OpenTrade(this, openCandle); 
+		state.OpenTrade(openCandle); 
 	}
 
 	public void CloseTrade(Enums.TradeType tradeTypeToClose, Asset closeCandle)
@@ -76,10 +79,9 @@ public class StrategyHandler
 		entryCandle = null;
 		
 		CalculateStatistics(tradeTypeToClose, closeCandle);
-		CurrentState.CloseTrade(this, closeCandle);
+		state.CloseTrade(this, closeCandle);
 	}
 
-	internal void SetState(IStrategyState state) => CurrentState = state;
 	
 	/// <summary>
 	///   Set statistics after closing the trade
