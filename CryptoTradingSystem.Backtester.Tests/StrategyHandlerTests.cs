@@ -1,5 +1,6 @@
 using CryptoTradingSystem.BackTester.StrategyHandler;
 using CryptoTradingSystem.General.Database.Models;
+using CryptoTradingSystem.General.Strategy;
 
 namespace CryptoTradingSystem.Backtester.Tests;
 
@@ -9,7 +10,7 @@ public class StrategyHandlerTestsOpenTrades
 	private StrategyHandler strategy = null!;
 	
 	[SetUp]
-	public void Setup() => strategy = new StrategyHandler("TestStrategy", 1000);
+	public void Setup() => strategy = new StrategyHandler("TestStrategy", 1000, new StrategyApprovementStatistics());
 
 	[Test]
 	[TestCaseSource(nameof(GetTestCases_TestOpenTrade_OpenCandle_Null))]
@@ -192,7 +193,7 @@ public class StrategyHandlerTestsCloseTrades
 	[SetUp]
 	public void Setup()
 	{
-		strategy = new StrategyHandler("TestStrategy", 100);
+		strategy = new StrategyHandler("TestStrategy", 100, new StrategyApprovementStatistics());
 
 		strategy.OpenTrade(Enums.TradeType.Buy, new Asset() { CandleClose = 100 });
 	}
@@ -265,7 +266,7 @@ public class StrategyHandlerTestsCloseTrades
 					Is.EqualTo(-20),
 					"strategy.Statistics.ReturnOnInvestment");
 				Assert.That(
-					strategy.Statistics.WonTradesPercentage,
+					strategy.Statistics.Winrate,
 					Is.EqualTo(0),
 					"strategy.Statistics.WonTradesPercentage");
 				Assert.That(
@@ -313,7 +314,7 @@ public class StrategyHandlerTestsCloseTrades
 					Is.EqualTo(-20),
 					"strategy.Statistics.ReturnOnInvestment");
 				Assert.That(
-					strategy.Statistics.WonTradesPercentage,
+					strategy.Statistics.Winrate,
 					Is.EqualTo(0),
 					"strategy.Statistics.WonTradesPercentage");
 				Assert.That(
@@ -362,7 +363,7 @@ public class StrategyHandlerTestsCloseTrades
 					Is.EqualTo(-20),
 					"strategy.Statistics.ReturnOnInvestment");
 				Assert.That(
-					strategy.Statistics.WonTradesPercentage,
+					strategy.Statistics.Winrate,
 					Is.EqualTo(0),
 					"strategy.Statistics.WonTradesPercentage");
 				Assert.That(
@@ -411,7 +412,7 @@ public class StrategyHandlerTestsCloseTrades
 					Is.EqualTo(-20),
 					"strategy.Statistics.ReturnOnInvestment");
 				Assert.That(
-					strategy.Statistics.WonTradesPercentage,
+					strategy.Statistics.Winrate,
 					Is.EqualTo(0),
 					"strategy.Statistics.WonTradesPercentage");
 				Assert.That(
@@ -460,7 +461,7 @@ public class StrategyHandlerTestsCloseTrades
 					Is.EqualTo(-20),
 					"strategy.Statistics.ReturnOnInvestment");
 				Assert.That(
-					strategy.Statistics.WonTradesPercentage,
+					strategy.Statistics.Winrate,
 					Is.EqualTo(0),
 					"strategy.Statistics.WonTradesPercentage");
 				Assert.That(
@@ -509,7 +510,7 @@ public class StrategyHandlerTestsCloseTrades
 					Is.EqualTo(-20),
 					"strategy.Statistics.ReturnOnInvestment");
 				Assert.That(
-					strategy.Statistics.WonTradesPercentage,
+					strategy.Statistics.Winrate,
 					Is.EqualTo(0),
 					"strategy.Statistics.WonTradesPercentage");
 				Assert.That(

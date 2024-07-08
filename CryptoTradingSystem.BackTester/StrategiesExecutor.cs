@@ -1,3 +1,5 @@
+using CryptoTradingSystem.BackTester.Interfaces;
+using CryptoTradingSystem.BackTester.StrategyHandler;
 using CryptoTradingSystem.General.Data;
 using CryptoTradingSystem.General.Database.Models;
 using CryptoTradingSystem.General.Helper;
@@ -11,6 +13,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+
 
 namespace CryptoTradingSystem.BackTester;
 
@@ -246,9 +249,7 @@ public class StrategiesExecutor : IDisposable
 			{
 				ExecuteStrategy(
 					connectionString,
-					(StrategyParameter) executionParameter.Item1!,
-					executionParameter.Item2,
-					executionParameter.Item3,
+					executionParameter,
 					newCancellationTokenSource.Token);
 			});
 
@@ -259,16 +260,19 @@ public class StrategiesExecutor : IDisposable
 		threads.Add(newStrategyThread, newCancellationTokenSource);
 
 		// TODO pass initialInvestment to the StrategyHandler from strategyparameter
-		StrategyHandlers.Add(new(strategyName, 1000));
+		StrategyHandlers.Add(
+			new(
+				strategyName, 
+				1000, 
+				executionParameter.Item1.StrategyApprovementStatistics
+			));
 
 		StrategyUpdateEvent?.Invoke(this, null);
 	}
 
 	private void ExecuteStrategy(
 		string connectionString,
-		StrategyParameter strategyParameter,
-		object? obj,
-		MethodInfo? executeStrategyMethod,
+		Tuple<StrategyParameter?, object?, MethodInfo?> executionParameter,
 		CancellationToken cancellationToken)
 	{
 		var tradestatus = Enums.TradeStatus.Closed;
@@ -279,7 +283,7 @@ public class StrategiesExecutor : IDisposable
 				return;
 			}
 
-			var results = MySQLDatabaseHandler.GetDataFromDatabase(strategyParameter, connectionString);
+			var results = MySQLDatabaseHandler.GetDataFromDatabase((StrategyParameter) executionParameter.Item1!, connectionString);
 			if (results.Count == 0)
 			{
 				continue;
@@ -287,7 +291,7 @@ public class StrategiesExecutor : IDisposable
 
 			try
 			{
-				HandleData(results, strategyParameter, obj, executeStrategyMethod, tradestatus);
+				HandleData(results, executionParameter, tradestatus);
 			}
 			catch (Exception e)
 			{
@@ -299,9 +303,7 @@ public class StrategiesExecutor : IDisposable
 
 	private void HandleData(
 		IReadOnlyList<Indicator?> results,
-		StrategyParameter strategyParameter,
-		object? obj,
-		MethodInfo? executeStrategyMethod,
+		Tuple<StrategyParameter?, object?, MethodInfo?> executionParameter,
 		Enums.TradeStatus tradestatus)
 	{
 		// TODO check if tradestatus and strategystate are persisted
@@ -312,13 +314,13 @@ public class StrategiesExecutor : IDisposable
 		}
 
 		strategy.CurrentCloseDateTime = results.Min(x => x!.CloseTime);
+		SwitchToValidationStateIfPossible(strategy);
 
-		var returnParameter = (StrategyReturnParameter) executeStrategyMethod!.Invoke(
-			obj,
+		var returnParameter = (StrategyReturnParameter) executionParameter.Item3!.Invoke(
+			executionParameter.Item2,
 			new object?[]
 			{
-				results,
-				tradestatus
+				results
 			})!;
 		
 		tradestatus = returnParameter.TradeStatus;
@@ -338,7 +340,21 @@ public class StrategiesExecutor : IDisposable
 				break;
 		}
 
-		strategyParameter.TimeFrameStart = results.Min(x => x!.CloseTime);
+		executionParameter.Item1!.TimeFrameStart = results.Min(x => x!.CloseTime);
+	}
+
+	// check if candle is the most recent one, by getting timeframe and check against todays end of day
+	// if so, switch into validating
+	// this applies to all strategies and not based on trades or their statistics
+	private static void SwitchToValidationStateIfPossible(StrategyHandler.StrategyHandler strategyHandler)
+	{
+		if (strategyHandler.CurrentCloseDateTime < DateTime.Today.AddHours(23)
+		    && strategyHandler.GetState() is BacktestingState)
+		{
+			return;
+		}
+		
+		strategyHandler.ChangeState(new ValidationState(strategyHandler));
 	}
 
 	private void HandleOpenTrade(
@@ -346,7 +362,30 @@ public class StrategiesExecutor : IDisposable
 		Enums.TradeType tradeType,
 		Asset candle)
 	{
-		strategy.OpenTrade(tradeType, candle);
+		try
+		{
+			strategy.OpenTrade(tradeType, candle);
+
+		}
+		catch (ArgumentException e)
+		{
+			if (e.Message.Contains("TradeType already exists"))
+			{
+				return;
+			}
+			
+			Log.Warning(e, 
+				"Could not open trade for reason: {ErrorMessage} "
+			               + "\r\n"
+			               + "candle: {candle}", 
+				e.Message,
+				candle);
+		}
+		catch (Exception ex)
+		{
+			Log.Error(ex, "Could not open trade");
+			throw;
+		}
 
 		// TODO need I to separate between Buy and Sell order?
 		// switch (tradeType)

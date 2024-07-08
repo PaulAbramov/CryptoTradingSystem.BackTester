@@ -2,6 +2,7 @@
 using CryptoTradingSystem.General.Data;
 using CryptoTradingSystem.General.Database;
 using CryptoTradingSystem.General.Database.Models;
+using CryptoTradingSystem.General.Helper;
 using CryptoTradingSystem.General.Strategy;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -100,18 +101,22 @@ public class MySQLDatabaseHandler : IDatabaseHandlerBackTester
 				var method = databaseHandlerType.GetMethod("GetIndicator");
 				var genericMethod = method?.MakeGenericMethod(asset.Item3);
 
-				//pass the parameters to the method
-				var result = (Indicator?) genericMethod?.Invoke(
-					databaseHandler,
-					new object?[]
+				var result = Retry.Do(
+					() =>
 					{
-						asset.Item2,
-						asset.Item1,
-						asset.Item3,
-						strategyParameter.TimeFrameStart,
-						strategyParameter.TimeFrameEnd
-					});
-
+						return (Indicator?) genericMethod?.Invoke(
+							databaseHandler,
+							new object?[]
+							{
+								asset.Item2,
+								asset.Item1,
+								asset.Item3,
+								strategyParameter.TimeFrameStart,
+								strategyParameter.TimeFrameEnd
+							});
+					}, TimeSpan.FromSeconds(1));
+				
+				//pass the parameters to the method
 				if (result is not null)
 				{
 					results.Add(result);

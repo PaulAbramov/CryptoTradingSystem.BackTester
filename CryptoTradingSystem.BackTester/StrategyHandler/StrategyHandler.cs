@@ -2,7 +2,6 @@ using CryptoTradingSystem.BackTester.Interfaces;
 using CryptoTradingSystem.General.Data;
 using CryptoTradingSystem.General.Database.Models;
 using CryptoTradingSystem.General.Strategy;
-using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,20 +17,20 @@ public class StrategyHandler : IChangeState
 	public int TradesAmount { get; set; }
 	public TimeSpan ApprovementDuration { get; set; }
 	public StrategyStatistics Statistics { get; private set; } = new();
-	public StrategyStatistics ApprovementStatistics { get; private set; } = new();
-	public Dictionary<Enums.TradeType, decimal> OpenTrades { get; }= new();
+	public Dictionary<Enums.TradeType, Asset> OpenTrades { get; } = new();
 	
+	private StrategyApprovementStatistics approvementStatistics;
 	private IStrategyState state;
-	private Asset? entryCandle;
 
-	public StrategyHandler(string name, decimal initialInvestment)
+	public StrategyHandler(string name, decimal initialInvestment, StrategyApprovementStatistics approvementStatistics)
 	{
 		Name = name;
+		this.approvementStatistics = approvementStatistics;
 		CurrentCloseDateTime = DateTime.MinValue;
 		RunningTrade = false;
 		TradesAmount = 0;
 		Statistics.InitialInvestment = initialInvestment;
-		state = new BacktestingState(this);
+		state = new BacktestingState();
 	}
 	
 	public void ChangeState(IStrategyState state) => this.state = state;
@@ -50,12 +49,11 @@ public class StrategyHandler : IChangeState
 			throw new ArgumentException("Parameter openCandle is null", nameof(openCandle));
 		}
 		
-		if (!OpenTrades.TryAdd(tradeType, openCandle.CandleClose))
+		if (!OpenTrades.TryAdd(tradeType, openCandle))
 		{
 			throw new ArgumentException("TradeType already exists", nameof(tradeType));
 		}
 			
-		entryCandle = openCandle;
 		state.OpenTrade(openCandle); 
 	}
 
@@ -71,15 +69,16 @@ public class StrategyHandler : IChangeState
 			throw new ArgumentException("Parameter closeCandle is null", nameof(closeCandle));
 		}
 		
-		if (entryCandle == null)
+		//TODO build in position size as we do maybe want to sell partions
+		if (!OpenTrades.ContainsKey(tradeTypeToClose))
 		{
 			return;
 		}
-
-		entryCandle = null;
+		
 		
 		CalculateStatistics(tradeTypeToClose, closeCandle);
 		state.CloseTrade(this, closeCandle);
+		OpenTrades.Remove(tradeTypeToClose);
 	}
 
 	
@@ -100,8 +99,8 @@ public class StrategyHandler : IChangeState
 
 		Statistics.ReturnOnInvestment = Statistics.ProfitLoss / Statistics.InitialInvestment * 100;
 
-		Statistics.WonTradesPercentage = Statistics.AmountOfWonTrades / Statistics.TradesAmount * 100;
-		Statistics.LostTradesPercentage = 100m - Statistics.WonTradesPercentage;
+		Statistics.Winrate = Statistics.AmountOfWonTrades / Statistics.TradesAmount * 100;
+		Statistics.LostTradesPercentage = 100m - Statistics.Winrate;
 
 		// TODO calculate RiskReward Ratio
 		// !ratio between potential profit and potential loss
@@ -132,13 +131,11 @@ public class StrategyHandler : IChangeState
 		{
 			case Enums.TradeType.Buy:
 				var buyTrade = OpenTrades.FirstOrDefault(x => x.Key == Enums.TradeType.Buy);
-				profitLoss = buyTrade.Value - candleClose;
-				OpenTrades.Remove(buyTrade.Key);
+				profitLoss = buyTrade.Value.CandleClose - candleClose;
 				break;
 			case Enums.TradeType.Sell:
 				var sellTrade = OpenTrades.FirstOrDefault(x => x.Key == Enums.TradeType.Sell);
-				profitLoss = candleClose - sellTrade.Value;
-				OpenTrades.Remove(sellTrade.Key);
+				profitLoss = candleClose - sellTrade.Value.CandleClose;
 				break;
 			case Enums.TradeType.None:
 			default:
